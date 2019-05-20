@@ -1,0 +1,102 @@
+---
+title: "Merge sample-runs into single RGSM"
+date: "April 27, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries}
+library( here )
+library( tidyverse )
+library( knitr )
+```
+
+```{r shared_functions}
+source( here::here( "project_shared_fxns.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( path_to_figures, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5 )
+```
+
+```{r information}
+ngs_info <- read_csv( file = project_rgid_path, col_names = TRUE )
+
+relevant_rgsm <- ngs_info %>%
+	select( RGSM, Status, Sex, Tissue ) %>%
+	as.data.frame( . ) %>%
+	unique( . ) %>%
+	arrange( Status, RGSM, Tissue ) %>%
+  as.data.frame( . )
+```
+
+```{r rgid_counts}
+rgid_counts <- read_csv( file = merged_count_rgid_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) )
+
+rgid_count_mat <- rgid_counts %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( df = ., var = "gene_id" ) %>%
+  as.matrix( . )
+```
+
+```{r merge_by_rgsm}
+rgsm_count_tibble <- tibble()
+
+rgsm_list <- pull( .data = relevant_rgsm, RGSM ) %>%
+  as.character( . ) %>%
+  sort( . ) %>%
+  unique( . )
+
+for( rgsm_idx in 1:length( rgsm_list ) ) {
+  curr_rgsm <- rgsm_list[ rgsm_idx ]
+  
+  associated_rgids <- filter( .data = ngs_info, RGSM == curr_rgsm ) %>%
+    pull( .data = ., RGID )
+  
+  sums <- rgid_count_mat[ , associated_rgids, drop=FALSE ] %>%
+    rowSums( . )
+  
+  temp_tibble <- tibble( gene_id = names( sums ), counts = as.integer( unname( sums ) ) )
+  colnames( temp_tibble )[2] = curr_rgsm
+  
+  if( sum( dim( rgsm_count_tibble ) ) > 0 ) {
+    rgsm_count_tibble <- merge( x = rgsm_count_tibble, y = temp_tibble, by = "gene_id" )
+  } else {
+    rgsm_count_tibble = temp_tibble
+  }
+  
+  rm( temp_tibble )
+}
+
+write_csv( x = rgsm_count_tibble, path = merged_count_path )
+```
+
+```{r reads_per_lane_by_sample}
+sums_per_sample_run <- colSums( rgid_count_mat )
+
+read_per_lane_by_rgid <- data.frame( RGID = names( sums_per_sample_run ), Reads = as.integer( unname( sums_per_sample_run ) ) ) %>%
+  mutate( .data = ., Lane = str_replace( string = RGID, pattern = "_[ACGT_]+$", replacement = "" ) )
+
+merge( x = read_per_lane_by_rgid, ngs_info, by = "RGID", all = TRUE ) %>%
+  select( .data = ., RGSM, Lane, Reads ) %>%
+  spread( data = ., key = Lane, value = Reads ) %>%
+  merge( x = relevant_rgsm, y = ., by = "RGSM" ) %>%
+  arrange( df = ., Status, RGSM ) %>%
+  write_csv( x = ., path = here::here( 'results', 'rgsm_coverage_by_lane.csv' ) )
+```
+
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

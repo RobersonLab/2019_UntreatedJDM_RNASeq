@@ -1,0 +1,451 @@
+---
+title: "Running WGCNA on samples"
+author: "E. Roberson"
+date: "September 04, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries}
+library( here )
+library( tidyverse )
+library( reshape2 )
+library( cowplot )
+library( WGCNA )
+library( dynamicTreeCut ) 
+```
+
+```{r shared_functions}
+source( here::here( "project_shared_fxns.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( path_to_figures, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5 )
+```
+
+```{r wgcna_setup}
+options( stringsAsFactors = FALSE )
+enableWGCNAThreads()
+```
+
+# 01 - Sample info and Rlog import
+
+```{r load_sample_info}
+sample_info <- read_csv( file = project_rgid_path ) %>%
+	select( RGSM, Status, Sex ) %>%
+  filter( .data = ., Status %in% c( "Control", "JDM_Untreated", "JDM_Inactive" ) ) %>%
+	as.data.frame( . ) %>%
+	unique( . )
+rownames( sample_info ) = sample_info$RGSM
+```
+
+```{r load_das_category}
+das_info <- read_csv( file = clinical_info_path )
+
+merged_info <- merge( x = sample_info, y = das_info, by = 'RGSM' ) %>%
+	as.data.frame( . )
+rownames( merged_info ) <- merged_info$RGSM
+```
+
+```{r annotation}
+ensembl = read_tsv( ensembl_annotation_path, col_names = c( 'gene_id', 'symbol' ), skip=1 ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+rownames( ensembl ) = ensembl$gene_id
+```
+
+```{r rlog_info}
+transposed_rlog <- read_csv( file = sample_intensities_path, col_names = TRUE, col_types = cols( .default = 'd', gene_id = 'c' ) ) %>%
+	as.data.frame( . ) %>%
+	column_to_rownames( "gene_id" ) %>%
+	as.matrix( . ) %>%
+  t( . )
+```
+
+```{r clin_info}
+this_contrast <- "DAS"
+
+disease_info <- merged_info %>%
+	select( RGSM:DAST ) %>%
+  select( -Status ) %>%
+	mutate( Sex = as.integer( factor( Sex ) ) ) %>%
+	as.data.frame( . )
+
+# match them up
+keep_names <- intersect( rownames( disease_info ), rownames( transposed_rlog))
+
+disease_info <-  disease_info[ drop=FALSE, keep_names, ] %>%
+  select( .data = ., -RGSM )
+  
+transposed_rlog <- transposed_rlog[ keep_names, ]
+
+disease_info
+```
+
+```{r wgcna_tree}
+sampleTree <- transposed_rlog %>%
+  dist( . ) %>%
+  hclust( ., method = 'average' )
+
+plot( sampleTree, sub="", xlab="" )
+```
+
+```{r wgcna_recluster}
+sample_tree_2 <- transposed_rlog %>%
+  dist( . ) %>%
+  hclust( ., method = 'average' )
+
+trait_colors <- numbers2colors( disease_info )
+plotDendroAndColors( sample_tree_2, trait_colors, groupLabels = names( disease_info ) )
+```
+
+# 02 - Setting thresholds and processing networks
+```{r run_soft_thresholding}
+#powers <- c( c( 1:10 ), seq( from = 12, to = 20, by = 2 ) )
+powers <- c( 1:15 )
+
+sft <- pickSoftThreshold( transposed_rlog, powerVector = powers, verbose = 5 )
+
+sizeGrWindow( 9, 5 )
+par( mfrow = c( 1, 2 ) )
+cex1 = 0.9
+
+# scale-free topology fit index as a function of the soft-thresholding power
+independence_df <- data.frame(
+	fitIndices = sft$fitIndices[ ,1 ],
+	scaleFreeTopology = -sign( sft$fitIndices[ , 3] ) * sft$fitIndices[ ,2 ],
+	connectivity = sft$fitIndices[ ,5 ],
+	text = as.character( powers )
+)
+
+autocalculated_soft_power <- independence_df %>%
+  mutate( .data = ., rounded = round( scaleFreeTopology, 2 ) ) %>%
+  filter( .data = ., rounded >= 0.90 ) %>%
+  arrange( fitIndices ) %>%
+  .[ 1, "fitIndices" ]
+
+independence_df <- independence_df %>%
+  mutate( isThreshold = case_when(
+    text == as.character( autocalculated_soft_power ) ~ "Soft-threshold",
+    TRUE ~ "Not Threshold" ) ) %>%
+  mutate( isThreshold = factor( isThreshold, levels=c( "Not Threshold", "Soft-threshold" ) ) )
+```
+
+```{r wgcna_plot_soft_thresholding}
+independence_ggplot <- ggplot( data = independence_df, aes( x = fitIndices, y = scaleFreeTopology, colour = isThreshold ) ) +
+	 geom_text( aes( label = text ), size = 5 ) +
+	geom_hline( mapping = aes( yintercept = 0.90 ), linetype = 2 ) +
+	theme_bw() +
+	theme( legend.position = 'none' ) +
+	xlab( "Soft Threshold (power)" ) +
+	ylab( parse( text = paste0( "Scale~Free~Toplogy~Model~Fit~(signed~R^2)" ) ) ) +
+	ggtitle( "Scale independence" ) +
+	#gg_bigger_texts +
+	gg_no_grid +
+	gg_center_title
+independence_ggplot
+
+# mean connectivity as fxn of soft-thresholding power
+connectivity_ggplot <- ggplot( data = independence_df, aes( x = fitIndices, y = connectivity, colour = isThreshold ) ) +
+	geom_text( aes( label = text ), size = 5 ) +
+	theme_bw() +
+	theme( legend.position = 'none' ) +
+	xlab( "Soft Threshold (power)" ) +
+	ylab( "Mean connectivity\n" ) +
+	ggtitle( "Mean connectivity" ) +
+	#gg_bigger_texts +
+	gg_no_grid +
+	gg_center_title
+connectivity_ggplot
+
+plot_grid( independence_ggplot, connectivity_ggplot, labels = c( 'A', 'B' ) )
+```
+
+The scale-independence should be chosen at about the 0.90 threshold.
+
+This is at approximately power `r autocalculated_soft_power` for this dataset.
+
+```{r run_adjacencies}
+collectGarbage()
+
+softPower <- autocalculated_soft_power
+
+adjacency_out = adjacency( datExpr = transposed_rlog, power = softPower, corFnc = bicor )
+```
+
+```{r convert_adjacency_to_TOM}
+collectGarbage()
+
+TOM <- TOMsimilarity( adjacency_out )
+
+dissTOM <- 1.0 - TOM
+```
+
+```{r wgcna_plotTOM}
+geneTree <- dissTOM %>%
+  as.dist( . ) %>%
+  hclust( ., method = 'average' )
+
+sizeGrWindow( 6, 4 )
+plot( geneTree )
+```
+
+```{r select_modules}
+minModuleSize = 30
+dynamicMods = cutreeDynamic( dendro = geneTree, distM = dissTOM, deepSplit = 2, pamRespectsDendro = FALSE, minClusterSize = minModuleSize )
+```
+
+```{r wgcna_gene_dynamic_colors}
+dynamicColors <- labels2colors( dynamicMods )
+table( dynamicColors )
+
+sizeGrWindow( 8,6 )
+plotDendroAndColors( geneTree, dynamicColors, "Dynamic Tree Cut", dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05, main = "Gene dendrogram and module colors" )
+```
+
+```{r wgcna_merge_similar}
+MEList <- moduleEigengenes( transposed_rlog, colors = dynamicColors )
+MEs <- MEList$eigengenes
+
+# dissimilarity
+MEDiss <- 1.0 - bicor( MEs )
+METree <- MEDiss %>%
+  as.dist( . ) %>%
+  hclust( ., method = 'average' )
+
+sizeGrWindow( 7, 6 )
+plot( METree, main = "Clustering of module eigengenes", xlab = "", sub = "" )
+```
+
+```{r merge}
+MEDissThresh <- 0.25 # 75% correlation
+
+merge <- mergeCloseModules( transposed_rlog, dynamicColors, cutHeight = MEDissThresh, verbose = 3 )
+
+mergedColors = merge$colors
+
+mergedMEs <- merge$newMEs
+```
+
+```{r wgcna_plot_merged_clusters}
+sizeGrWindow( 12,9 )
+
+plotDendroAndColors( geneTree, cbind( dynamicColors, mergedColors ), c( "Dynamic Tree Cut", "Merged dynamic" ), dendroLabels =  FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05 )
+```
+
+```{r prep_y_save_some_info}
+moduleColors <- mergedColors
+colorOrder = c( "grey", standardColors( 50 ) )
+moduleLabels <- match( moduleColors, colorOrder ) - 1
+MEs <- mergedMEs
+
+# save some of the these lengthy computations
+save( MEs, moduleLabels, moduleColors, geneTree, file = here::here( 'results',  "Untreated_Inactive_Control_step_by_step_network.RData" ) )
+```
+
+# 03 - relate modules to external information
+```{r define_ngenes_samples}
+nGenes <- ncol( transposed_rlog )
+nSamples <- nrow( transposed_rlog )
+
+# recalc MEs with color labels
+MEs0 <- moduleEigengenes( transposed_rlog, moduleColors )$eigengenes
+MEs <- orderMEs( MEs0 )
+
+#moduleTraitCor <- cor( MEs, disease_info, use = 'p' )
+moduleTraitCor <- bicor( x = MEs, y = disease_info, use = 'p' )
+moduleTraitPvalue <- corPvalueStudent( cor = moduleTraitCor, nSamples = nSamples )
+```
+
+```{r wgcna_module_trait_graphic}
+sizeGrWindow( 10, 6 )
+
+textMatrix <- paste0( signif( moduleTraitCor, 2 ), "\n(", signif( moduleTraitPvalue, 1 ), ")" )
+
+dim( textMatrix ) <- dim( moduleTraitCor )
+par( mar = c( 6, 8.5, 3, 3 ) )
+
+# display correlation values within heatmap plot
+labeledHeatmap( Matrix = moduleTraitCor,
+                xLabels = names( disease_info ),
+                yLabels = names( MEs ),
+                colorLabels = FALSE,
+                colors = blueWhiteRed( 50 ),
+                textMatrix = textMatrix,
+                setStdMargins = FALSE,
+                cex.text = 0.5,
+                zlim = c( -1, 1 ),
+                main = "Module-trait relationships" )
+```
+## Module membership
+```{r gene_signif_module_member}
+modNames <- names( MEs )
+
+geneModuleMembership <- bicor( x = transposed_rlog, y = MEs, use = 'p' ) %>%
+  as.data.frame( . )
+
+MMPvalue <- geneModuleMembership %>%
+  as.matrix( x = . ) %>%
+  corPvalueStudent( cor = ., nSamples = nSamples ) %>%
+  as.data.frame( x = . )
+
+names( geneModuleMembership ) <- paste0( "MM_", modNames )
+names( MMPvalue ) <- paste0( "p.MM_", modNames )
+```
+
+## Trait associations
+```{r trait_associations}
+pvalue_cutoff_modules <- 0.001
+
+trait_list <- names( disease_info )
+pvalue_colors <- rownames( moduleTraitPvalue )
+
+signif_colors_for_later <- c()
+
+for( trait_idx in 1:length( trait_list ) )
+{
+  curr_trait <- trait_list[ trait_idx ]
+  
+  trait_df <- disease_info[ , curr_trait, drop = FALSE ]
+  
+  geneTraitSignificance <- bicor( x = transposed_rlog, y = trait_df, use = 'p' ) %>%
+    as.data.frame( . )
+  
+  GSPvalue <- as.matrix( geneTraitSignificance ) %>%
+    corPvalueStudent( cor = ., nSamples = nSamples ) %>%
+    as.data.frame( . )
+  
+  names( geneTraitSignificance ) <- paste0( "GS.corr.Status" )
+  names( GSPvalue ) <- paste0( "p.GS.Status" )
+  
+  # now process each signif module for the trait
+  signif_colors <- pvalue_colors[ which( moduleTraitPvalue[ , curr_trait ] < pvalue_cutoff_modules ) ]
+  signif_colors_for_later = c( signif_colors_for_later, signif_colors )
+  
+  tmp <- data.frame(
+      gene_id = colnames( transposed_rlog ),
+      moduleColor = moduleColors,
+      geneTraitSignificance,
+      GSPvalue ) %>%
+    mutate( symbol = ensembl[ gene_id, 'symbol' ] ) 
+  
+  modOrder <- MEs %>%
+    bicor( x = ., y = trait_df, use = 'p' ) %>%
+    -abs( x = . ) %>%
+    order( . )
+  
+  for ( mod_idx in 1:ncol( geneModuleMembership ) )
+  {
+    oldNames <- names( tmp )
+    curr_col <- modOrder[ mod_idx ]
+    tmp <- data.frame( tmp,
+                       geneModuleMembership[ , curr_col ],
+                       MMPvalue[ , curr_col ] )
+    names( tmp ) <- c(
+      oldNames,
+      paste0( "MM.", modNames[ curr_col ] ),
+      paste0( "p.MM.", modNames[ curr_col ] ) )
+  }
+  
+  fname <- file.path( wgcna_output_path, paste0( "WGCNA_table_", curr_trait, ".csv" ) )
+  fname_down <- file.path( wgcna_output_path, paste0( "WGCNA_table_", curr_trait, "_down_genes.csv" ) )
+  fname_up <- file.path( wgcna_output_path, paste0( "WGCNA_table_", curr_trait, "_up_genes.csv" ) )
+  
+  tmp_signif_cor_all <- tmp %>%
+    filter( moduleColor %in% str_replace( string = signif_colors, pattern = "^ME", replacement = "" ) ) %>%
+    arrange( p.GS.Status, GS.corr.Status )
+  
+  if ( dim( tmp_signif_cor_all )[1] > 0 ) {
+    tmp_signif_cor_all %>%
+    write_csv( x = ., path = fname )
+    
+    tmp_signif_cor_down <- tmp_signif_cor_all %>%
+      filter( p.GS.Status < 0.05 & GS.corr.Status < 0.0 ) %>%
+      arrange( p.GS.Status, GS.corr.Status )
+  
+    if ( dim( tmp_signif_cor_down )[1] > 0 ) {
+      tmp_signif_cor_down %>%
+        write_csv( x = ., path = fname_down )
+    }
+    
+    tmp_signif_core_up <- tmp_signif_cor_all %>%
+      filter( p.GS.Status < 0.05 & GS.corr.Status > 0.0 ) %>%
+      arrange( p.GS.Status, GS.corr.Status )
+    
+    if ( dim( tmp_signif_core_up )[1] > 0 ) {
+      tmp_signif_cor_all %>%
+        write_csv( x = ., path = fname_up )
+    }
+  }
+}
+```
+
+# 04 - interfacing network analysis of other data such as functional annotation and gene ontology
+Wrote in section 3. Can be manually run through gProfileR
+
+# 05 - network visualization using WGCNA functions
+Skip
+
+# 06 - exporting a gene network to external visualization software
+```{r wgcna_export_for_gephi}
+signif_colors_for_later <- signif_colors_for_later %>%
+  unique( . ) %>%
+  str_replace( string = ., pattern = "^ME", replacement = "" )
+
+TOM <- TOMsimilarityFromExpr( datExpr = transposed_rlog, power = softPower )
+
+modules <- signif_colors_for_later
+
+probes <- colnames( transposed_rlog )
+
+inModule <- match( moduleColors, modules ) %>%
+  is.finite( . )
+
+modProbes <- probes[ inModule ]
+modGenes <- ensembl[ modProbes, "symbol" ]
+
+NA_idx <- which( is.na( modGenes ) )
+
+if ( length( NA_idx ) > 0 )
+{
+  modGenes[ NA_idx ] <- modProbes[ NA_idx ]
+}
+
+modTOM <- TOM[ inModule, inModule ]
+
+dimnames( modTOM ) <- list( modProbes, modProbes )
+
+edgeFilePath <- file.path(
+  wgcna_output_path,
+  paste0( "GephiInput-edges-", this_contrast, "-", paste( modules, collapse = "-" ), ".txt" ) )
+
+nodeFilePath <- file.path( 
+  wgcna_output_path, 
+  paste0( "GephiInput-nodes-", this_contrast, "-", paste( modules, collapse = "-" ), ".txt" ) )
+
+cyt <- exportNetworkToCytoscape(
+  adjMat = modTOM,
+  edgeFile = edgeFilePath,
+  nodeFile = nodeFilePath,
+  weighted = TRUE,
+  threshold = 0.15,
+  nodeNames = modGenes,
+  altNodeNames = modProbes,
+  nodeAttr = moduleColors[ inModule ] )
+```
+
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```
