@@ -58,7 +58,7 @@ dast <- read_csv( file.path( wgcna_output_path, "WGCNA_table_DAST.csv " ) ) %>%
   select( gene_id, symbol, DAST.Correlation, DAST.pvalue )
 
 # Inactive / active status
-inactive_change <- read_csv( here::here( 'results', 'deg_untreated_vs_control_with_change.csv' ) ) %>%
+inactive_change <- read_csv( here::here( 'results', 'deg_untreated_vs_inactive_paired_with_treateffect.csv' ) ) %>%
   select( gene_id, TreatmentEffect )
 ```
 
@@ -116,7 +116,7 @@ correlation_upset_df <- data.frame( gene_id = all_corr_ids ) %>%
   mutate( .data = ., NegDAST = case_when(
     gene_id %in% neg_dast ~ 1,
     TRUE ~ 0 ) ) %>%
-  column_to_rownames( df = ., var = "gene_id" )
+  column_to_rownames( var = "gene_id" )
 
 upset( correlation_upset_df, text.scale = c( 3, 3, 3, 2, 3, 3 ), point.size = 5, line.size = 2, nintersects = NA )
 ```
