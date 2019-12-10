@@ -51,7 +51,7 @@ with( data = sample_info, table( Status, Sex ) ) %>%
 ```
 
 ```{r slurp_counts}
-count.mat <- read_csv( file = merged_count_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
+count.mat <- read_tsv( file = merged_count_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
 	as.data.frame( . ) %>%
 	column_to_rownames( "gene_id" ) %>%
 	as.matrix( . )
