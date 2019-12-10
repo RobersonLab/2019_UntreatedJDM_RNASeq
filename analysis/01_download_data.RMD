@@ -43,6 +43,40 @@ for ( idx in 1:length( file_link_map ) ) {
 }
 ```
 
+```{r make_merged_counts}
+# we got the data from figshare
+# but that is by RGID
+# we need to collapse it by rgsm
+
+rgid_info <- read_csv( file =  project_rgid_path )
+
+rgid_count_matrix <- read_csv( file = merged_count_rgid_path  ) %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" ) %>%
+  as.matrix( . )
+
+rgsm_list <- pull( .data = rgid_info, var = RGSM ) %>%
+  sort( . ) %>%
+  unique( . )
+
+rgsm_counts <- tibble( gene_id = rownames( rgid_count_matrix ) )
+
+for ( idx in 1:length( rgsm_list ) ) {
+  curr_rgsm <- rgsm_list[ idx ]
+  
+  rgid_list <- rgid_info %>%
+    filter( RGSM == curr_rgsm ) %>%
+    pull( RGID )
+  
+  rgsm_counts$tmp <- rgid_count_matrix[ , rgid_list, drop = FALSE ] %>%
+    rowSums( x = ., na.rm = TRUE )
+  
+  colnames( rgsm_counts )[ dim( rgsm_counts )[2] ] = curr_rgsm
+}
+
+write_tsv( x = rgsm_counts, path = merged_count_path )
+```
+
 ```{r session_information}
 Sys.time()
 
