@@ -78,7 +78,7 @@ deg_file_untreated_control <- here::here( 'results', "deg_untreated_vs_control.c
 
 deg_file_inactive_control <- here::here( 'results', "deg_inactive_vs_control.csv" )
 
-deg_file_inactive_untreated_paired <- here::here( 'results', "deg_inactive_vs_untreated_paired.csv" )
+deg_file_inactive_untreated_paired <- here::here( 'results', "deg_untreated_vs_inactive_paired.csv" )
 
 deg_file_prepsor_control <- here::here( 'results', "deg_prepsor_vs_control.csv" )
 
@@ -95,8 +95,8 @@ gprofiler_untreated_control_down <- here::here( 'results', "gprofiler_input_untr
 gprofiler_inactive_control_up <- here::here( 'results', "gprofiler_input_inactive_control_up.csv" )
 gprofiler_inactive_control_down <- here::here( 'results', "gprofiler_input_inactive_control_down.csv" )
 
-gprofiler_inactive_untreated_paired_up <- here::here( 'results', "gprofiler_input_inactive_untreated_paired_up.csv" )
-gprofiler_inactive_untreated_paired_down <- here::here( 'results', "gprofiler_input_inactive_untreated_paired_down.csv" )
+gprofiler_inactive_untreated_paired_up <- here::here( 'results', "gprofiler_input_untreated_v_inactive_paired_up.csv" )
+gprofiler_inactive_untreated_paired_down <- here::here( 'results', "gprofiler_input_untreated_v_inactive_paired_down.csv" )
 
 gprofiler_prepsor_control_up <- here::here( 'results', "gprofiler_input_prepsor_control_up.csv" )
 gprofiler_prepsor_control_down <-here::here( 'results', "gprofiler_input_prepsor_control_down.csv" )
@@ -148,10 +148,10 @@ gg_no_grid <- theme(
   panel.grid.minor = element_blank()
 )
 
-gg_no_x_grid <- theme( 
+gg_no_x_grid <- theme(
   panel.grid.major.x = element_blank() )
 
-gg_no_y_grid <- theme( 
+gg_no_y_grid <- theme(
   panel.grid.major.y = element_blank() )
 
 gg_center_title <- theme(
@@ -188,7 +188,7 @@ format_deseq_results <- function( deseq_results, annotation_df ) {
 	filter( !is.na( pvalue ) ) %>%
 	mutate( log2FC = log2FoldChange ) %>%
 	mutate( FC = 2^log2FC ) %>%
-	mutate( FC = case_when( 
+	mutate( FC = case_when(
 		FC < 1.0 ~ -1 / FC,
 		TRUE ~ FC )
 	) %>%
@@ -208,22 +208,22 @@ summarize_pretty_de_results <- function( pretty_de, fc_cutoff ) {
 		filter( qval < 0.05 & FC < 1.0 ) %>%
 		pull( gene_id ) %>%
 		length( . )
-		
+
 	down_fc <- pretty_de %>%
 		filter( qval < 0.05 & FC < ( -1 * fc_cutoff ) ) %>%
 		pull( gene_id ) %>%
 		length( . )
-		
+
 	up <- pretty_de %>%
 		filter( qval < 0.05 & FC > 1.0 ) %>%
 		pull( gene_id ) %>%
 		length( . )
-	
+
 	up_fc <- pretty_de %>%
 		filter( qval < 0.05 & FC > fc_cutoff ) %>%
 		pull( gene_id ) %>%
 		length( . )
-	
+
 	data.frame( Change = c( 'Down', 'Down - FC', 'Up', 'Up - FC' ), n = c( down, down_fc, up, up_fc ) ) %>%
 		return( . )
 }
@@ -237,12 +237,12 @@ make_ggplot_volcano <- function( deg_dataframe, case_name, control_name, axis_st
 	# set significance threshold #
 	##############################
 	deg_dataframe <- deg_dataframe %>%
-	mutate( Significant = case_when( 
+	mutate( Significant = case_when(
 		qval < qvalue_cutoff & abs( FC ) >= fold_change_cutoff ~ "Large",
 		qval < qvalue_cutoff ~ "Modest",
 		TRUE ~ "Not" ) ) %>%
 	mutate( Significant = factor( Significant, levels=c( "Not", "Modest", "Large" ) ) )
-	
+
 	################################
 	# set values for square x axis #
 	################################
@@ -260,7 +260,7 @@ make_ggplot_volcano <- function( deg_dataframe, case_name, control_name, axis_st
 	x_volcano_high <- x_volcano_value
 
 	x_break_list <- seq( -1 * x_num_for_limits, x_num_for_limits, by = axis_steps )
-	
+
 	##############
 	# plot lines #
 	##############
@@ -285,7 +285,7 @@ make_ggplot_volcano <- function( deg_dataframe, case_name, control_name, axis_st
 		geom_text_repel( data=subset( deg_dataframe, Significant == "Large" )[c(1:max_label),], colour="black", aes( label=symbol ), size=3 ) +
 		xlab( parse( text=paste0( "log[2]~(", case_name, "/", control_name, ")" ) ) ) +
 		ylab( parse( text = paste0( "-log[10]~(Adj.~p-value)" ) ) )
-		
+
 	return( plot_volcano )
 }
 
@@ -295,17 +295,17 @@ make_ggplot_volcano <- function( deg_dataframe, case_name, control_name, axis_st
 direction_gene_ids_from_de <- function( deg_df, qval_cutoff = 0.05 ) {
   down.gid <- filter( deg_df, qval < qval_cutoff & FC < 0.0 ) %>%
     pull( gene_id )
-  
+
   up.gid <- filter( deg_df, qval < qval_cutoff & FC > 0.0 ) %>%
     pull( gene_id )
-  
+
   unchanged.gid <- filter( deg_df, qval >= qval_cutoff ) %>%
     pull( gene_id )
-  
+
   de.size <- filter( deg_df, qval < qval_cutoff ) %>%
     pull( gene_id ) %>%
     length( . )
-  
+
   list( 'down' = down.gid, 'up' = up.gid, 'unchanged' = unchanged.gid, 'de' = de.size ) %>%
     return( . )
 }
@@ -314,20 +314,20 @@ direction_gene_ids_from_de <- function( deg_df, qval_cutoff = 0.05 ) {
 # Set before / after status #
 #############################
 setup_alluvial_table_paired_data <- function( left.direction.list, right.direction.list ) {
-  # Left should be case vs. control.
-  # Right should be case timepoint 2 vs. case timepoint 1
+  # Left should be case / control.
+  # Right should be case timepoint 2 / case timepoint 1
   up2improved <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
   up2worsened <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
   up2unchanged <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
-    
+
   down2improved <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
   down2worsened <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
   down2unchanged <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
-    
+
   unchanged2up <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
   unchanged2down <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
   unchanged2unchanged <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
-  
+
   data.frame( Left = "Up", Right = "Improved", n = up2improved ) %>%
     rbind( ., data.frame( Left = "Up", Right = "Worsened", n = up2worsened ) ) %>%
     rbind( ., data.frame( Left = "Up", Right = "Unchanged", n = up2unchanged ) ) %>%
@@ -357,9 +357,9 @@ convertRefseqList2SymbolList <- function( input_string, name_frame, string_sep =
 #################################################
 parse_raw_gprofile <- function( gprof_file_path, symbol_df, title.truncate = 65, title.wrap = 35 ) {
   gprof_colnames = c( "ignore", "signf", "pvalue", "T", "Q", "Q&T", "Q&T/Q", "Q&T/T", "term_ID", "t_type", "t group", "t_name", "t depth", "Q&T list" )
-  
+
   new_filename_string <- str_replace( gprof_file_path, pattern = "v00", "v01" )
-  
+
   read_tsv( file = gprof_file_path, comment="#", col_names = gprof_colnames, col_types = c("ccdiiiddccicic") ) %>%
     mutate( name = str_replace( t_name, "^ +", "" ) ) %>%
     select( -ignore, -signf ) %>%
@@ -383,7 +383,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
   if ( !is.null( dim( full.down.tbl ) ) ) {
     plot.down.tbl <- full.down.tbl %>%
       ddply( .variables = c( "t_type" ), .fun = top_n, wt = pvalue, n = -6 )
-    
+
     ################################
     # individual decreased pathway #
     ################################
@@ -400,7 +400,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "GO Biological Process" )
-    
+
     cc.plt.down <- filter( plot.down.tbl, t_type == "CC" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -414,7 +414,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "GO Cellular Compartment" )
-    
+
     kegg.plt.down  <- filter( plot.down.tbl, t_type == "keg" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -428,7 +428,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "KEGG" )
-    
+
     react.plt.down <- filter( plot.down.tbl, t_type == "rea" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -442,48 +442,48 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "Reactome" )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_BP_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( bp.plt.down )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_CC_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( cc.plt.down )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_KEGG_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( kegg.plt.down )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_REAC_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( react.plt.down )
     dev.off()
-    
+
     bp.plt.down <- bp.plt.down + gg_gprofile_quadplot
-    
+
     cc.plt.down <- cc.plt.down + gg_gprofile_quadplot
-    
+
     kegg.plt.down <- kegg.plt.down + gg_gprofile_quadplot
-    
+
     react.plt.down <- react.plt.down + gg_gprofile_quadplot
-    
+
     multi.plt.down <- plot_grid( bp.plt.down, cc.plt.down, kegg.plt.down, react.plt.down, labels=c( 'A', 'B', 'C', 'D' ), ncol=2, nrow=2 )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_multi_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( multi.plt.down )
     dev.off()
-    
+
     ##############
     # top n down #
     ##############
-    topn.down.tbl <- full.down.tbl %>% 
+    topn.down.tbl <- full.down.tbl %>%
       filter( t_type != "tf" ) %>%
       top_n( ., wt=pvalue, n = -10 ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) )
-    
+
     num.down.topn <- dim( topn.down.tbl )[1]
-    
+
     topn.down.plt <- ggplot( topn.down.tbl, aes( y = -log10( pvalue ), x = title ) ) +
       theme_classic() +
       gg_bigger_texts +
@@ -495,16 +495,16 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       xlab( "Pathway\n" ) +
       ggtitle( paste0( "Top ", num.down.topn, " Decreased Enrichments" ) ) +
       theme( axis.text = element_text( size=16 ) )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_topn_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( topn.down.plt )
     dev.off()
   }
-  
+
   if ( !is.null( dim( full.up.tbl ) ) ) {
     plot.up.tbl <- full.up.tbl %>%
       ddply( .variables = c( "t_type" ), .fun = top_n, wt = pvalue, n = -6 )
-    
+
     ################################
     # individual increased pathway #
     ################################
@@ -521,7 +521,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "GO Biological Process" )
-    
+
     cc.plt.up <- filter( plot.up.tbl, t_type == "CC" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -535,7 +535,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "GO Cellular Compartment" )
-    
+
     kegg.plt.up  <- filter( plot.up.tbl, t_type == "keg" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -549,7 +549,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "KEGG" )
-    
+
     react.plt.up <- filter( plot.up.tbl, t_type == "rea" ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) ) %>%
@@ -563,48 +563,48 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       ylab( parse( text="-log[10](P-value)" ) ) +
       xlab( "Pathway\n" ) +
       ggtitle( "Reactome" )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_BP_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( bp.plt.up )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_CC_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( cc.plt.up )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_KEGG_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( kegg.plt.up )
     dev.off()
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_REAC_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( react.plt.up )
     dev.off()
-    
+
     bp.plt.up <- bp.plt.up + gg_gprofile_quadplot
-    
+
     cc.plt.up <- cc.plt.up + gg_gprofile_quadplot
-    
+
     kegg.plt.up <- kegg.plt.up + gg_gprofile_quadplot
-    
+
     react.plt.up <- react.plt.up + gg_gprofile_quadplot
-    
+
     multi.plt.up <- plot_grid( bp.plt.up, cc.plt.up, kegg.plt.up, react.plt.up, labels=c( 'A', 'B', 'C', 'D' ), ncol=2, nrow=2 )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_multi_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( multi.plt.up )
     dev.off()
-    
+
     ##############
     # top n up #
     ##############
-    topn.up.tbl <- full.up.tbl %>% 
+    topn.up.tbl <- full.up.tbl %>%
       filter( t_type != "tf" ) %>%
       top_n( ., wt=pvalue, n = -10 ) %>%
       arrange( desc( pvalue ) ) %>%
       mutate( title = factor( title, levels=title ) )
-    
+
     num.up.topn <- dim( topn.up.tbl )[1]
-    
+
     topn.up.plt <- ggplot( topn.up.tbl, aes( y = -log10( pvalue ), x = title ) ) +
       theme_classic() +
       gg_bigger_texts +
@@ -616,7 +616,7 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
       xlab( "Pathway\n" ) +
       ggtitle( paste0( "Top ", num.up.topn, " Increased Enrichments" ) ) +
       theme( axis.text = element_text( size=16 ) )
-    
+
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_topn_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( topn.up.plt )
     dev.off()
