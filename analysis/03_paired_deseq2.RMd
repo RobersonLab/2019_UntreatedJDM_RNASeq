@@ -45,7 +45,7 @@ sample_info <- read_csv( file = project_rgid_path ) %>%
 	select( RGSM, Status, Individual ) %>%
 	as.data.frame( . ) %>%
 	unique( . ) %>%
-	mutate( Status = factor( Status, levels=c( 'JDM_Untreated', 'JDM_Inactive' ) ) )
+	mutate( Status = factor( Status, levels=c( 'JDM_Inactive', 'JDM_Untreated' ) ) )
 
 as.data.frame( sample_info )
 
@@ -53,7 +53,9 @@ rownames( sample_info ) = sample_info$RGSM
 ```
 
 ```{r slurp_counts}
-count.mat <- read_csv( file = merged_count_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
+count.mat <- read_tsv( file = merged_count_path,
+                       col_names = TRUE,
+                       col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
 	as.data.frame( . ) %>%
 	column_to_rownames( "gene_id" ) %>%
 	as.matrix( . )
@@ -127,7 +129,7 @@ rownames( sample_info ) = sample_info$RGSM
 ```
 
 ```{r slurp_counts_psoriasis}
-count.mat <- read_csv( file = merged_count_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
+count.mat <- read_tsv( file = merged_count_path, col_names = TRUE, col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
 	as.data.frame( . ) %>%
 	column_to_rownames( "gene_id" ) %>%
 	as.matrix( . )

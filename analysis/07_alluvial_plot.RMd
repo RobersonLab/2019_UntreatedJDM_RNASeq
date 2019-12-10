@@ -37,14 +37,27 @@ inactive_v_untreated <- read_csv( file = deg_file_inactive_untreated_paired )
 
 untreated_v_control.gid <- direction_gene_ids_from_de( untreated_v_control )
 
-inactive_v_untreated.gid <- direction_gene_ids_from_de( inactive_v_untreated )
+inactive_v_untreated.gid <- inactive_v_untreated %>%
+  mutate( FC = FC * ( -1.0 ) ) %>%
+  direction_gene_ids_from_de( . )
+# why, you might ask, are we flipping
+# the fold-change?
+# Reader, this was setup so that downstream
+# we expect one part of alluvial to be
+# case / control. And another part to be
+# timepoint 2 / timepoint 1.
+# i.e. untreated / control and
+# inactive / untreated. Problem
+# is the reviewers wanted it to be
+# untreated / control and untreated / inactive
+# so here we are. ¯\_(ツ)_/¯
 ```
 
-DE Untreated: `r untreated_v_control.gid[[ 'de' ]]`.
+DE Untreated v. Control: `r untreated_v_control.gid[[ 'de' ]]`.
 DE Down: `r length( untreated_v_control.gid[[ 'down' ]] )`.
 DE Up: `r length( untreated_v_control.gid[[ 'up' ]])`.
 
-DE Inactive: `r inactive_v_untreated.gid[[ 'de' ]]`.
+DE Inactive v. Untreated: `r inactive_v_untreated.gid[[ 'de' ]]`.
 DE Down: `r length( inactive_v_untreated.gid[[ 'down' ]] )`.
 DE Up: `r length( inactive_v_untreated.gid[[ 'up' ]] )`.
 
@@ -95,22 +108,23 @@ ggplot( data = for_alluvial, aes( y = count, axis1 = Left_label, axis2 = Right_l
 ## Adding resolution status to the DEG output for Inactive vs. Untreated
 
 ```{r update_inactive_untreated_new_column}
-# inactive_v_untreated
-
+# don't worry, the logic here should
+# still be correct despite the 
+# fold-change monkey business above
 inactive_v_untreated %>%
 	mutate( TreatmentEffect = case_when(
-		qval < 0.05 & gene_id %in% untreated_v_control.gid[[ 'unchanged' ]] ~ "New",
-		qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Improved",
-		qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Improved",
-		qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Worsened",
-		qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Worsened",
-		qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'unchanged' ]] ~ "Never DE",
-		qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Unresolved",
-		qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Unresolved",
+	  qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Improved",
+	  qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Improved",
+	  qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Worsened",
+	  qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Worsened",
+	  qval < 0.05 ~ "New",
+	  qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Unresolved",
+	  qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Unresolved",
+	  qval > 0.05 ~ "Never DE",
 		TRUE ~ "Problem"
 	)) %>%
 	arrange( qval, pval, symbol ) %>%
-	write_csv( x = ., path = str_replace( string = deg_file_untreated_control, pattern = "control.", replacement = "control_with_change." ) )
+	write_csv( x = ., path = str_replace( string = deg_file_inactive_untreated_paired, pattern = "_paired", replacement = "_paired_with_treateffect" ) )
 ```
 
 # Section on JDM-only / Pre-psoriasis

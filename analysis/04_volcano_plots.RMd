@@ -49,7 +49,7 @@ inactive_control_volcano_plot
 ```{r inactive_untreated_paired_volcano}
 inactive_untreated_paired_volcano_plot <- read_csv( file = deg_file_inactive_untreated_paired ) %>%
 	as.data.frame( . ) %>%
-	make_ggplot_volcano( deg_dataframe = ., case_name = "Inactive", control_name = "Untreated" )
+	make_ggplot_volcano( deg_dataframe = ., case_name = "Untreated", control_name = "Inactive" )
 	
 inactive_untreated_paired_volcano_plot
 ```
