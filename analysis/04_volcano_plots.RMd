@@ -55,7 +55,7 @@ inactive_untreated_paired_volcano_plot <- read_csv( file = deg_file_inactive_unt
 	
 inactive_untreated_paired_volcano_plot
 
-save( inactive_untreated_paired_volcano_plot, file = file.path( path_to_saved_objects, "inactive_v_untreated_paired_volcano.RData" ) )
+save( inactive_untreated_paired_volcano_plot, file = file.path( path_to_saved_objects, "untreated_v_inactive_volcano.RData" ) )
 ```
 
 ```{r pre_control_volcano}
