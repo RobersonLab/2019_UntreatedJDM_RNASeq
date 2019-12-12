@@ -35,7 +35,7 @@ knitr::opts_chunk$set(
 
 ```{r rtqpcr_input}
 raw_data <- read_csv( file = rtqpcr_raw_data_path ) %>%
-  filter( .data = ., RGSM != "Pachman_H20" ) 
+  filter( .data = ., RGSM != "Pachman_H20" )
 ```
 
 ```{r mean_sd}
@@ -64,6 +64,16 @@ dCq <- mean_sd %>%
   mutate( .data = ., Status = factor( Status, levels = c( "Control", "Untreated", "Inactive" ) ) )
 ```
 
+```{r anova}
+tukey_output <- aov( formula = dOtOf_mean ~ Status, data = dCq ) %>%
+  TukeyHSD( . )
+
+tukey_output
+
+untreated_v_control_pvalue <- tukey_output[[ 'Status' ]][ "Untreated-Control", "p adj" ]
+inactive_v_untreated_pvalue <- tukey_output[[ 'Status' ]][ "Inactive-Untreated", "p adj" ]
+```
+
 ```{r group_dCq}
 group_dCq <- dCq %>%
   dplyr::group_by( .data = ., Status ) %>%
@@ -86,6 +96,11 @@ group_dCq <- group_dCq %>%
 ```
 
 ```{r RTqPCR_OtOf}
+control_untreated_error_bar_y = 4.5 #16.5
+inactive_untreated_error_bar_y = 3
+y_offset = 0.4
+asterisk_size = 6
+
 ggplot( data = group_dCq, mapping = aes( x = Status, y = mean_foldchange ) ) +
   theme_bw() +
   gg_bigger_texts +
@@ -95,7 +110,11 @@ ggplot( data = group_dCq, mapping = aes( x = Status, y = mean_foldchange ) ) +
   geom_errorbar( aes( ymin = mean_foldchange - sd_foldchange, ymax = mean_foldchange + sd_foldchange ), width=0.2, position=position_dodge( 0.3 ), lwd=1.02 ) +
   geom_point( size = 3.5 ) +
   ggtitle( "Otoferlin RT-qPCR foldchanges" ) +
-  gg_center_title
+  gg_center_title +
+  geom_segment( aes( x = 2, xend = 3, y = inactive_untreated_error_bar_y, yend = inactive_untreated_error_bar_y ), size = 1.5 ) +
+  geom_segment( aes( x = 1, xend = 2, y = control_untreated_error_bar_y, yend = control_untreated_error_bar_y ), size = 1.5 ) +
+  geom_text( x = 1.5, y = control_untreated_error_bar_y + y_offset, label = paste0( "P = ", sprintf( "%.2e", untreated_v_control_pvalue ) ), size = asterisk_size, hjust = 0.5 ) +
+  geom_text( x = 2.5, y = inactive_untreated_error_bar_y + y_offset, label = paste0( "P = ", sprintf( "%.2e", inactive_v_untreated_pvalue ) ), size = asterisk_size, hjust = 0.5 )
 ```
 
 # Session info
