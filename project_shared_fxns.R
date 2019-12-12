@@ -569,6 +569,8 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_topn_down.jpeg" ) ), width=1280, height=1024, res=75 )
     print( topn.down.plt )
     dev.off()
+  } else {
+    topn.down.plt <- NULL
   }
 
   if ( !is.null( dim( full.up.tbl ) ) ) {
@@ -690,5 +692,9 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
     jpeg( file = file.path( gprofile_figure_path, paste0( contrast, "_topn_up.jpeg" ) ), width=1280, height=1024, res=75 )
     print( topn.up.plt )
     dev.off()
+  } else {
+    topn.up.plt <- NULL
   }
+
+  return( list( 'up' = topn.up.plt, 'down' = 'topn.down.plt' ) )
 }
