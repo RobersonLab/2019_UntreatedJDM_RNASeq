@@ -27,6 +27,7 @@ path_to_gprofiler_figures <- here::here( 'results', 'gprofile_figures' )
 path_to_gprofiles <- here::here( 'results', 'gprofiler_output_maxSize500' )
 path_to_gene_figures <- here::here( 'results', 'individual_genes_all' )
 path_to_gene_figures_untreated <- here::here( 'results', 'individual_genes_untreated' )
+path_to_saved_objects <- here::here( 'results', 'r_objects' )
 
 dir.create( here::here( 'info' ), showWarnings = FALSE )
 dir.create( path_to_results, showWarnings = FALSE )
@@ -37,6 +38,7 @@ dir.create( path_to_gprofiler_figures, showWarnings = FALSE )
 dir.create( path_to_gprofiles, showWarnings = FALSE )
 dir.create( path_to_gene_figures, showWarnings = FALSE )
 dir.create( path_to_gene_figures_untreated, showWarnings = FALSE )
+dir.create( path_to_saved_objects, showWarnings = FALSE )
 
 ##############
 # file paths #
