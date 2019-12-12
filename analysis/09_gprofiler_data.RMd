@@ -41,7 +41,7 @@ knitr::opts_chunk$set(
 # contrasts
 # untreated_v_control
 # inactive_v_control
-# inactive_v_untreated_paired
+# untreated_v_inactive_paired
 # pre_v_control
 # psor_v_control ## up only
 ```
@@ -120,7 +120,7 @@ gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.t
 # Inactive vs. Untreated
 ```{r inactive_v_untreated_paired}
 # has to be consistent between files
-contrast <- "inactive_v_untreated_paired"
+contrast <- "untreated_v_inactive_paired"
 
 # Decreased genes
 down.fname <- dir( path_to_gprofiles, pattern = paste0( "gprofiler_results_[0-9]+_", contrast, "_down_v00.txt" ) )
