@@ -49,7 +49,7 @@ dasm <- read_csv( file.path( wgcna_output_path, "WGCNA_table_DASM.csv" ) ) %>%
   mutate( DASM.pvalue = p.GS.Status ) %>%
   select( gene_id, symbol, DASM.Correlation, DASM.pvalue )
 
-dast <- read_csv( file.path( wgcna_output_path, "WGCNA_table_DAST.csv " ) ) %>%
+dast <- read_csv( file.path( wgcna_output_path, "WGCNA_table_DAST.csv" ) ) %>%
   filter( p.GS.Status < 0.05 ) %>%
   select( gene_id:symbol ) %>%
   select( -moduleColor ) %>%
