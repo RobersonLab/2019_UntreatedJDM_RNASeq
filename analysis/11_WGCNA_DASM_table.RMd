@@ -145,6 +145,7 @@ for( idx in 1:length( in_list ) ) {
     mutate( .data = ., Target = toNode ) %>%
     mutate( .data = ., Type = "Undirected" ) %>%
     select( .data = ., Source, Target, weight, Type ) %>%
+    arrange( Source, Target ) %>%
     write_csv( x = ., path = file.path( wgcna_output_path, paste0( new_fname, ".csv" ) ) )
 }
 ```
