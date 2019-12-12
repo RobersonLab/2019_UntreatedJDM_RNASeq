@@ -53,16 +53,20 @@ inactive_v_untreated.gid <- inactive_v_untreated %>%
 # so here we are. ¯\_(ツ)_/¯
 ```
 
-DE Untreated v. Control: `r untreated_v_control.gid[[ 'de' ]]`.
-DE Down: `r length( untreated_v_control.gid[[ 'down' ]] )`.
-DE Up: `r length( untreated_v_control.gid[[ 'up' ]])`.
+DE Untreated v. Control: `r untreated_v_control.gid[[ 'num_de' ]]`.
+DE Down: `r untreated_v_control.gid[[ 'num_down' ]]`.
+DE Up: `r untreated_v_control.gid[[ 'num_up' ]]`.
 
-DE Inactive v. Untreated: `r inactive_v_untreated.gid[[ 'de' ]]`.
-DE Down: `r length( inactive_v_untreated.gid[[ 'down' ]] )`.
-DE Up: `r length( inactive_v_untreated.gid[[ 'up' ]] )`.
+DE Inactive v. Untreated: `r inactive_v_untreated.gid[[ 'num_de' ]]`.
+DE Down: `r inactive_v_untreated.gid[[ 'num_down' ]]`.
+DE Up: `r inactive_v_untreated.gid[[ 'num_up' ]]`.
 
 ```{r setup_alluvial_frame}
-for_alluvial <- setup_alluvial_table_paired_data( untreated_v_control.gid, inactive_v_untreated.gid ) %>%
+for_alluvial <- setup_alluvial_table_paired_data( untreated_v_control.gid, inactive_v_untreated.gid )
+
+for_alluvial
+
+for_alluvial <- for_alluvial %>%
   dplyr::rename( .data = ., count = n ) %>%
   filter( .data = ., count > 0 ) %>%
   filter( .data = ., !( Left == "Unchanged" & Right == "Unchanged" ) ) %>%
@@ -100,27 +104,37 @@ ggplot( data = for_alluvial, aes( y = count, axis1 = Left_label, axis2 = Right_l
   	scale_x_continuous( breaks = 1:2, labels = c( 'Untreated', 'Inactive' ) ) +
   	gg_bigger_texts +
   	theme( legend.position = 'top' ) +
-  	ggtitle( "Expression in response to treatment" ) +
+  	ggtitle( "Changes in gene expression in response to treatment" ) +
   	gg_center_title + 
-    guides( fill = guide_legend( title = "Untreated" ) )
+    guides( fill = guide_legend( title = "" ) )
 ```
 
 ## Adding resolution status to the DEG output for Inactive vs. Untreated
 
 ```{r update_inactive_untreated_new_column}
-# don't worry, the logic here should
-# still be correct despite the 
-# fold-change monkey business above
+# this logic was written with the original analysis
+# i.e. the DEG were expressed as Inactive / Control
+# now these lists were created above using that same logic
+# remember we temporarily flipped the fold-change?
+# so it's going to *seem* backwords, but is correct
+# Is this a bunch of malarkey?
+# yes it certainly is. but sometimes with reviews
+# that suggest one "small" change the downstream 
+# effects are many. this is one of them. again,
+# not how I would have done it, but was necessary
+# to address a single reviewer comment.
+#
+# TL;DR -- this is correct still, but seems backwards.
 inactive_v_untreated %>%
 	mutate( TreatmentEffect = case_when(
-	  qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Improved",
-	  qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Improved",
-	  qval < 0.05 & FC < 1.0 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Worsened",
-	  qval < 0.05 & FC > 1.0 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Worsened",
+	  qval < 0.05 & FC < 0.0 & gene_id %in% untreated_v_control.gid[[ 'down_gene_ids' ]] ~ "Improved",
+	  qval < 0.05 & FC > 0.0 & gene_id %in% untreated_v_control.gid[[ 'up_gene_ids' ]] ~ "Improved",
+	  qval < 0.05 & FC < 0.0 & gene_id %in% untreated_v_control.gid[[ 'up_gene_ids' ]] ~ "Worsened",
+	  qval < 0.05 & FC > 0.0 & gene_id %in% untreated_v_control.gid[[ 'down_gene_ids' ]] ~ "Worsened",
 	  qval < 0.05 ~ "New",
-	  qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'up' ]] ~ "Unresolved",
-	  qval > 0.05 & gene_id %in% untreated_v_control.gid[[ 'down' ]] ~ "Unresolved",
-	  qval > 0.05 ~ "Never DE",
+	  qval >= 0.05 & gene_id %in% untreated_v_control.gid[[ 'up_gene_ids' ]] ~ "Unresolved",
+	  qval >= 0.05 & gene_id %in% untreated_v_control.gid[[ 'down_gene_ids' ]] ~ "Unresolved",
+	  qval >= 0.05 ~ "Never DE",
 		TRUE ~ "Problem"
 	)) %>%
 	arrange( qval, pval, symbol ) %>%
@@ -139,13 +153,13 @@ psor_v_prepsor <- read_csv( file = deg_file_prepsor_psor_paired )
 psor.gid.list <- direction_gene_ids_from_de( psor_v_prepsor )
 ```
 
-DE PrePsor: `r prepsor.gid.list[[ 'de' ]]`.
-DE Down: `r length( prepsor.gid.list[[ 'down' ]] )`.
-DE Up: `r length( prepsor.gid.list[[ 'up' ]] )`.
+DE PrePsor: `r prepsor.gid.list[[ 'num_de' ]]`.
+DE Down: `r prepsor.gid.list[[ 'num_down' ]]`.
+DE Up: `r prepsor.gid.list[[ 'num_up' ]]`.
 
 DE Psor vs. PrePsor: `r psor.gid.list[[ 'de' ]]`. 
-DE Down: `r length( psor.gid.list[[ 'down' ]] )`. 
-DE Up: `r length( psor.gid.list[[ 'up' ]] )`.
+DE Down: `r psor.gid.list[[ 'num_down' ]]`. 
+DE Up: `r psor.gid.list[[ 'num_up' ]]`.
 
 ```{r setup_alluvial_frame_PSOR}
 for_alluvial <- setup_alluvial_table_paired_data( prepsor.gid.list, psor.gid.list )
