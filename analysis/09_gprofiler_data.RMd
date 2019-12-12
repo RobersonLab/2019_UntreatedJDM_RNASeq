@@ -82,7 +82,14 @@ full.up.tbl <- parse_raw_gprofile( gprof_file_path = up.fpath, symbol_df = ensem
 # make the figures #
 ####################
 #gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name, gprofile_figure_path )
-gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.tbl, contrast_name = contrast_name, gprofile_figure_path = path_to_gprofiler_figures )
+untreat_v_control_plot_list <- gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.tbl, contrast_name = contrast_name, gprofile_figure_path = path_to_gprofiler_figures )
+
+curr_up = untreat_v_control_plot_list[[ 'up' ]]
+curr_down = untreat_v_control_plot_list[[ 'down' ]]
+
+save( curr_up, file = file.path( path_to_saved_objects, "untreated_v_control_up_pathway.RData" ) )
+
+save( curr_down, file = file.path( path_to_saved_objects, "untreated_v_control_down_pathway.RData" ) )
 ```
 
 # Inactive vs. Control
@@ -118,7 +125,7 @@ gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.t
 ```
 
 # Inactive vs. Untreated
-```{r inactive_v_untreated_paired}
+```{r untreated_v_inactive_paired}
 # has to be consistent between files
 contrast <- "untreated_v_inactive_paired"
 
@@ -146,7 +153,14 @@ full.up.tbl <- parse_raw_gprofile( gprof_file_path = up.fpath, symbol_df = ensem
 # make the figures #
 ####################
 #gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name, gprofile_figure_path )
-gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.tbl, contrast_name = contrast_name, gprofile_figure_path = path_to_gprofiler_figures )
+untreat_v_inactive_plot_list <- gprofiler_ggplot_bonanza( full.down.tbl = full.down.tbl, full.up.tbl = full.up.tbl, contrast_name = contrast_name, gprofile_figure_path = path_to_gprofiler_figures )
+
+curr_up = untreat_v_inactive_plot_list[[ 'up' ]]
+curr_down = untreat_v_inactive_plot_list[[ 'down' ]]
+
+save( curr_up, file = file.path( path_to_saved_objects, "untreated_v_inactive_up_pathway.RData" ) )
+
+save( curr_down, file = file.path( path_to_saved_objects, "untreated_v_inactive_down_pathway.RData" ) )
 ```
 
 # PrePsor vs. Control
