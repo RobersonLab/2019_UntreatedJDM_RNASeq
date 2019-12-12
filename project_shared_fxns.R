@@ -696,5 +696,5 @@ gprofiler_ggplot_bonanza <- function( full.down.tbl, full.up.tbl, contrast_name,
     topn.up.plt <- NULL
   }
 
-  return( list( 'up' = topn.up.plt, 'down' = 'topn.down.plt' ) )
+  return( list( 'up' = topn.up.plt, 'down' = topn.down.plt ) )
 }
