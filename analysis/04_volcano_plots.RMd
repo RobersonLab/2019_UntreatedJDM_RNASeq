@@ -36,6 +36,8 @@ untreated_control_volcano_plot <- read_csv( file = deg_file_untreated_control ) 
 	make_ggplot_volcano( deg_dataframe = ., case_name = "Untreated", control_name = "Control" )
 
 untreated_control_volcano_plot
+
+save( untreated_control_volcano_plot, file = file.path( path_to_saved_objects, "untreated_v_control_volcano.RData" ) )
 ```
 
 ```{r inactive_control_volcano}
@@ -52,6 +54,8 @@ inactive_untreated_paired_volcano_plot <- read_csv( file = deg_file_inactive_unt
 	make_ggplot_volcano( deg_dataframe = ., case_name = "Untreated", control_name = "Inactive" )
 	
 inactive_untreated_paired_volcano_plot
+
+save( inactive_untreated_paired_volcano_plot, file = file.path( path_to_saved_objects, "inactive_v_untreated_paired_volcano.RData" ) )
 ```
 
 ```{r pre_control_volcano}
