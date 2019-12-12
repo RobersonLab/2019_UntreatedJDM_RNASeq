@@ -189,7 +189,7 @@ format_deseq_results <- function( deseq_results, annotation_df ) {
 	mutate( log2FC = log2FoldChange ) %>%
 	mutate( FC = 2^log2FC ) %>%
 	mutate( FC = case_when(
-		FC < 1.0 ~ -1 / FC,
+		FC < 1.0 ~ -1.0 / FC,
 		TRUE ~ FC )
 	) %>%
 	mutate( pval = pvalue ) %>%
@@ -204,18 +204,20 @@ format_deseq_results <- function( deseq_results, annotation_df ) {
 # Report differential expression #
 ##################################
 summarize_pretty_de_results <- function( pretty_de, fc_cutoff ) {
+  fc_cutoff <- abs( fc_cutoff )
+
 	down <- pretty_de %>%
-		filter( qval < 0.05 & FC < 1.0 ) %>%
+		filter( qval < 0.05 & FC < 0.0 ) %>%
 		pull( gene_id ) %>%
 		length( . )
 
 	down_fc <- pretty_de %>%
-		filter( qval < 0.05 & FC < ( -1 * fc_cutoff ) ) %>%
+		filter( qval < 0.05 & FC < ( -1.0 * fc_cutoff ) ) %>%
 		pull( gene_id ) %>%
 		length( . )
 
 	up <- pretty_de %>%
-		filter( qval < 0.05 & FC > 1.0 ) %>%
+		filter( qval < 0.05 & FC > 0.0 ) %>%
 		pull( gene_id ) %>%
 		length( . )
 
@@ -293,40 +295,107 @@ make_ggplot_volcano <- function( deg_dataframe, case_name, control_name, axis_st
 # make lists of up and down genes #
 ###################################
 direction_gene_ids_from_de <- function( deg_df, qval_cutoff = 0.05 ) {
-  down.gid <- filter( deg_df, qval < qval_cutoff & FC < 0.0 ) %>%
+  # gene_id lists
+  tested_genes_gid <- pull( deg_df, gene_id )
+
+  deg_gid <- filter( deg_df, qval < qval_cutoff ) %>%
     pull( gene_id )
 
-  up.gid <- filter( deg_df, qval < qval_cutoff & FC > 0.0 ) %>%
+  down_gid <- filter( deg_df, qval < qval_cutoff & FC < 0.0 ) %>%
     pull( gene_id )
 
-  unchanged.gid <- filter( deg_df, qval >= qval_cutoff ) %>%
+  up_gid <- filter( deg_df, qval < qval_cutoff & FC > 0.0 ) %>%
     pull( gene_id )
 
-  de.size <- filter( deg_df, qval < qval_cutoff ) %>%
-    pull( gene_id ) %>%
-    length( . )
+  unchanged_gid <- filter( deg_df, qval >= qval_cutoff ) %>%
+    pull( gene_id )
 
-  list( 'down' = down.gid, 'up' = up.gid, 'unchanged' = unchanged.gid, 'de' = de.size ) %>%
+  # gene class counts
+  total_size <- length( tested_genes_gid )
+
+  de_size <- length( deg_gid )
+
+  up_size <- length( up_gid )
+
+  down_size <- length( down_gid )
+
+  # some validity checking
+  stopifnot( de_size == up_size + down_size )
+  stopifnot( all( tested_genes_gid %in% c( down_gid, up_gid, unchanged_gid ) ) )
+  stopifnot( !any( deg_gid %in% unchanged_gid ) )
+
+  # build the output list
+  list( 'down_gene_ids' = down_gid,
+        'up_gene_ids' = up_gid,
+        'unchanged_gene_ids' = unchanged_gid,
+        'deg_gid' = deg_gid,
+        'all_tested_gid' = tested_genes_gid,
+        'num_tested' = total_size,
+        'num_de' = de_size,
+        'num_up' = up_size,
+        'num_down' = down_size ) %>%
     return( . )
 }
 
 #############################
 # Set before / after status #
 #############################
-setup_alluvial_table_paired_data <- function( left.direction.list, right.direction.list ) {
+setup_alluvial_table_paired_data <- function( left_direction_list, right_direction_list ) {
   # Left should be case / control.
   # Right should be case timepoint 2 / case timepoint 1
-  up2improved <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
-  up2worsened <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
-  up2unchanged <- which( left.direction.list[[ 'up' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
+  up2improved <- intersect( left_direction_list[[ 'up_gene_ids' ]], right_direction_list[[ 'down_gene_ids' ]] ) %>% length( . )
 
-  down2improved <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
-  down2worsened <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
-  down2unchanged <- which( left.direction.list[[ 'down' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
+  up2worsened <- intersect( left_direction_list[[ 'up_gene_ids' ]], right_direction_list[[ 'up_gene_ids' ]] ) %>% length( . )
 
-  unchanged2up <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'up' ]] ) %>% length( . )
-  unchanged2down <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'down' ]] ) %>% length( . )
-  unchanged2unchanged <- which( left.direction.list[[ 'unchanged' ]] %in% right.direction.list[[ 'unchanged' ]] ) %>% length( . )
+  up2unchanged <- setdiff( left_direction_list[[ 'up_gene_ids' ]], right_direction_list[[ 'deg_gid' ]] ) %>% length( . )
+
+  down2improved <- intersect( left_direction_list[[ 'down_gene_ids' ]], right_direction_list[[ 'up_gene_ids' ]] ) %>% length( . )
+
+  down2worsened <- intersect( left_direction_list[[ 'down_gene_ids' ]], right_direction_list[[ 'down_gene_ids' ]] ) %>% length( . )
+
+  down2unchanged <- setdiff( left_direction_list[[ 'down_gene_ids' ]], right_direction_list[[ 'deg_gid' ]] ) %>% length( . )
+
+  unchanged2up <- setdiff( right_direction_list[[ 'up_gene_ids' ]], left_direction_list[[ 'deg_gid' ]] ) %>% length( . )
+
+  unchanged2down <- setdiff( right_direction_list[[ 'down_gene_ids' ]], left_direction_list[[ 'deg_gid' ]] ) %>% length( . )
+
+  unchanged2unchanged <- union( left_direction_list[[ 'all_tested_gid' ]], right_direction_list[[ 'all_tested_gid' ]] ) %>%
+    setdiff( ., union( left_direction_list[[ 'deg_gid' ]], right_direction_list[[ 'deg_gid' ]] ) ) %>% length( . )
+
+  data.frame( Left = "Up", Right = "Improved", n = up2improved ) %>%
+    rbind( ., data.frame( Left = "Up", Right = "Worsened", n = up2worsened ) ) %>%
+    rbind( ., data.frame( Left = "Up", Right = "Unchanged", n = up2unchanged ) ) %>%
+    rbind( ., data.frame( Left = "Down", Right = "Improved", n = down2improved ) ) %>%
+    rbind( ., data.frame( Left = "Down", Right = "Worsened", n = down2worsened ) ) %>%
+    rbind( ., data.frame( Left = "Down", Right = "Unchanged", n = down2unchanged ) ) %>%
+    rbind( ., data.frame( Left = "Unchanged", Right = "Up", n = unchanged2up ) ) %>%
+    rbind( ., data.frame( Left = "Unchanged", Right = "Down", n = unchanged2down ) ) %>%
+    rbind( ., data.frame( Left = "Unchanged", Right = "Unchanged", n = unchanged2unchanged ) ) %>%
+    return( . )
+}
+
+old_setup_alluvial_table_paired_data <- function( left_direction_list, right_direction_list ) {
+  # Left should be case / control.
+  # Right should be case timepoint 2 / case timepoint 1
+  up2improved <- which( left_direction_list[[ 'up_gene_ids' ]] %in% right_direction_list[[ 'down_gene_ids' ]] ) %>% length( . )
+
+  up2worsened <- which( left_direction_list[[ 'up_gene_ids' ]] %in% right_direction_list[[ 'up_gene_ids' ]] ) %>% length( . )
+
+  ## ATTN
+  up2unchanged <- left_direction_list[[ 'num_up' ]] - ( length( up2improved ) + length( up2worsened ) )
+
+  down2improved <- which( left_direction_list[[ 'down_gene_ids' ]] %in% right_direction_list[[ 'up_gene_ids' ]] ) %>% length( . )
+
+  down2worsened <- which( left_direction_list[[ 'down_gene_ids' ]] %in% right_direction_list[[ 'down_gene_ids' ]] ) %>% length( . )
+
+  ## ATTN
+  down2unchanged <- left_direction_list[[ 'num_down' ]] - ( length( down2improved ) + length( down2worsened ) )
+
+  unchanged2up <- which( !( right_direction_list[[ 'up' ]] %in% left_direction_list[[ 'full_de_list']] ) ) %>%
+    length( . )
+
+  unchanged2down <- which( !( right_direction_list[[ 'down' ]] %in% left_direction_list[[ 'full_de_list' ]] ) ) %>%
+    length( . )
 
   data.frame( Left = "Up", Right = "Improved", n = up2improved ) %>%
     rbind( ., data.frame( Left = "Up", Right = "Worsened", n = up2worsened ) ) %>%
@@ -336,7 +405,6 @@ setup_alluvial_table_paired_data <- function( left.direction.list, right.directi
     rbind( ., data.frame( Left = "Down", Right = "Unchanged", n = down2unchanged ) ) %>%
     rbind( ., data.frame( Left = "Unchanged", Right = "Up", n = unchanged2up ) ) %>%
     rbind( ., data.frame( Left = "Unchanged", Right = "Down", n= unchanged2down ) ) %>%
-    rbind(., data.frame(  Left = "Unchanged", Right = "Unchanged", n = unchanged2unchanged ) ) %>%
     return( . )
 }
 
