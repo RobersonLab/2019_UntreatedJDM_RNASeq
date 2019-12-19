@@ -79,10 +79,10 @@ combo <- dasm %>%
   write_csv( x = ., path = here::here( 'results', 'DASM_y_DAST_table.csv' ) )
 
 combo = combo %>%
-  mutate( SignifDASM = case_when( `DASM pvalue` < 0.05 ~ "Yes", TRUE ~ "No" ) ) %>%
-  mutate( SignifDAST = case_when( `DAST pvalue` < 0.05 ~ "Yes", TRUE ~ "No" ) ) %>%
-  mutate( CorrTypeDASM = case_when( `DASM Correlation` < 0.0 ~ "Negative", TRUE ~ "Positive" ) ) %>%
-  mutate( CorrTypeDAST = case_when( `DAST Correlation` < 0.0 ~ "Negative", TRUE ~ "Positive" ) )
+  mutate( SignifDASM = case_when( is.na( `DASM pvalue` ) ~ "Is_NA", `DASM pvalue` < 0.05 ~ "Yes", TRUE ~ "No" ) ) %>%
+  mutate( SignifDAST = case_when( is.na( `DAST pvalue` ) ~ "Is_NA", `DAST pvalue` < 0.05 ~ "Yes", TRUE ~ "No" ) ) %>%
+  mutate( CorrTypeDASM = case_when( is.na( `DASM Correlation` ) ~ "Is_NA", `DASM Correlation` < 0.0 ~ "Negative", TRUE ~ "Positive" ) ) %>%
+  mutate( CorrTypeDAST = case_when( is.na( `DAST Correlation` ) ~ "Is_NA", `DAST Correlation` < 0.0 ~ "Negative", TRUE ~ "Positive" ) )
 
 with( data = combo, table( SignifDASM, SignifDAST ) )
 
