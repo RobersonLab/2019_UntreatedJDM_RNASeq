@@ -153,9 +153,9 @@ il6_plot  <-   return_ggplot_object( current_gene = unname( id_list[ 'IL6'  ] ),
 cxcl10_plot <- return_ggplot_object( current_gene = unname( id_list[ 'CXCL10' ] ), xlabel = "\n" )
 
 initial_cowplot <- plot_grid(
-  cxcl10_plot + theme( legend.position = 'none' ),
+  cxcl10_plot + theme( legend.position = 'none' ) + ylab( "Expression (rlog)"),
   il6_plot    + theme( legend.position = 'none' ),
-  il1b_plot   + theme( legend.position = 'none' ),
+  il1b_plot   + theme( legend.position = 'none' ) + ylab( "Expression (rlog)"),
   il1a_plot   + theme( legend.position = 'none' ),
   nrow = 2,
   labels = c( 'a', 'b', 'c', 'd' )
