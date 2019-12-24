@@ -1,0 +1,88 @@
+---
+title: "Combined volcano and pathways"
+author: "E. Roberson"
+date: "Dec. 18, 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries}
+library( here )
+library( cowplot )
+library( tidyverse )
+```
+
+```{r shared_functions}
+source( here::here( "project_shared_fxns.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( path_to_figures, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5 )
+```
+
+# Untreated v. Control
+```{r load_untreat_v_control}
+load( file = here::here( 'results', 'r_objects', 'untreated_v_control_volcano.RData' ) )
+load( file = here::here( 'results', 'r_objects', 'untreated_v_control_up_pathway.RData' ) )
+load( file = here::here( 'results', 'r_objects', 'untreated_v_control_down_pathway.RData' ) )
+```
+
+```{r new_untreated_vs_control}
+gg_reduce_pathway_text = theme(
+    axis.title = element_text( size=14 ),
+    axis.text.y = element_text( size=8 ),
+    axis.text.x = element_text( size = 10 ),
+    plot.title = element_text( size=15 )
+)
+
+volcano <- untreated_control_volcano_plot +
+  gg_reduce_pathway_text +
+  ggtitle( "Untreated vs. Control volcano plot" )
+
+volcano <- plot_grid( volcano, labels = "A" )
+
+pathways <- plot_grid( curr_up + gg_reduce_pathway_text, curr_down + gg_reduce_pathway_text, nrow = 2, labels = c( "B", "C" ) )
+
+new_merged_untreated_vs_control <- plot_grid( volcano, pathways, nrow = 1, rel_widths = c( 1, 1.5 ) )
+
+new_merged_untreated_vs_control
+```
+
+# Untreated v. Inactive
+```{r load_untreated_v_inactive}
+load( file = here::here( 'results', 'r_objects', 'untreated_v_inactive_volcano.RData' ) )
+load( file = here::here( 'results', 'r_objects', 'untreated_v_inactive_up_pathway.RData' ) )
+load( file = here::here( 'results', 'r_objects', 'untreated_v_inactive_down_pathway.RData' ) )
+```
+
+```{r new_untreated_vs_inactive}
+volcano <- inactive_untreated_paired_volcano_plot +
+  gg_reduce_pathway_text +
+  ggtitle( "Untreated vs. Inactive volcano plot" )
+
+volcano <- plot_grid( volcano, labels = "A" )
+
+pathways <- plot_grid( curr_up + gg_reduce_pathway_text, curr_down + gg_reduce_pathway_text, nrow = 2, labels = c( "B", "C" ) )
+
+new_merged_untreated_vs_inactive <- plot_grid( volcano, pathways, nrow = 1, rel_widths = c( 1, 1.5 ) )
+
+new_merged_untreated_vs_inactive
+```
+
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```
