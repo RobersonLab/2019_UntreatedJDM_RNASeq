@@ -93,6 +93,8 @@ group_dCq <- group_dCq %>%
   mutate( .data = ., sd_ddCq = sqrt( sum( group_dOtOf_sd^2 + control_dCq_sd^2 ) ) ) %>%
   mutate( .data = ., mean_foldchange = 2^(-1 * mean_ddCq ) ) %>%
   mutate( .data = ., sd_foldchange = log(2) * mean_foldchange * sd_ddCq )
+
+as.data.frame( group_dCq )
 ```
 
 ```{r RTqPCR_OtOf}
