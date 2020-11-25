@@ -17,10 +17,15 @@
 *.utf8.md
 *.knit.md
 
-# ignore big output files
+# ignore output files
 results/*
+
+# ignore some things from FigShare
+data/rgid_unspliced_saf.csv.gz
+info/JDM_RNASeq_ReadGroup_Info.csv
 
 # ignore specific output types
 *.log
 *.html
 *.fastq.gz
+*.bam
