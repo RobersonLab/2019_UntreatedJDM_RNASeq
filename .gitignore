@@ -22,7 +22,7 @@ results/*
 
 # ignore some things from FigShare
 data/*
-info/*
+info/*.csv
 
 # ignore specific output types
 *.log
