@@ -21,8 +21,8 @@
 results/*
 
 # ignore some things from FigShare
-data/rgid_unspliced_saf.csv.gz
-info/JDM_RNASeq_ReadGroup_Info.csv
+data/*
+info/*
 
 # ignore specific output types
 *.log
