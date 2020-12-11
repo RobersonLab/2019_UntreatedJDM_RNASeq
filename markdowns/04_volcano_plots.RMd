@@ -1,0 +1,92 @@
+---
+title: "Volcano plots"
+author: "Elisha Roberson"
+date: "2020-09-29"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r lists}
+contrast_list <- list(
+  c( "Control", "Untreated", "PBMC_Untreated_over_Control", 2, 8 ),
+  c( "Control", "JDM", "Muscle_JDM_over_Control", 2, 8 ),
+  c( "Control", "JDM", "Skin_JDM_over_Control", 2, 8 ) ,
+  c( "Inactive", "Untreated", "Untreated_over_Inactive", 2, 8 )
+)
+```
+
+```{r volcano_plots}
+for ( idx in 1:length( contrast_list ) ){
+  current_contrast <- contrast_list[[ idx ]]
+  
+  control_name <- current_contrast[ 1 ]
+  case_name <- current_contrast[ 2 ]
+  basename <- current_contrast[ 3 ]
+  volcano_axis_steps <- as.integer( current_contrast[ 4 ] )
+  
+  max_log2_p <- as.integer( current_contrast[5] ) 
+  
+  deg_filename <- paste0( "DiffExp_", basename, ".tsv" )
+  
+  #jpeg_name <- paste0( "Volcano_", basename, ".jpeg" )
+  
+  # read deg
+  deg <- read_tsv( file = here( "results", deg_filename ) ) %>%
+    mutate( log2FoldChange = case_when(
+      log2FoldChange > max_log2_p ~ Inf,
+      log2FoldChange < (-1 * max_log2_p ) ~ -Inf,
+      TRUE ~ log2FoldChange
+    ) )
+  
+  # make ggplot object
+  volcano_object <- make_ggplot_volcano( deg_dataframe = deg, 
+                                         case_name = case_name, 
+                                         control_name = control_name, 
+                                         axis_steps = volcano_axis_steps )
+  
+  # print object
+  #jpeg( filename = here( "results", "figures", jpeg_name ), 
+  #      width = 1200, 
+  #      height = 780 )
+  
+  print( volcano_object )
+  
+  #dev.off()
+  
+  # save object
+  save( volcano_object, file = here( "results", "r_objects", paste0( "Volcano_", basename, ".RData" ) ) )
+}
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

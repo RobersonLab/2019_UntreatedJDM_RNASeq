@@ -1,0 +1,234 @@
+---
+title: "Alluvial plot of treatment changes"
+author: "Elisha Roberson"
+date: "2020-10-14"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( ggalluvial )
+library( tidyverse )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r load_deg}
+untreat_v_control_deg <- read_tsv( file = here( 'results', 'DiffExp_PBMC_Untreated_over_Control.tsv' ) )
+  
+untreat_v_inactive_deg <- read_tsv( file = here( 'results', 'DiffExp_Untreated_over_Inactive.tsv' ) )
+
+untreat_v_control_deg_ids <- filter( untreat_v_control_deg, qval < 0.05 ) %>%
+  pull( gene_id )
+
+untreat_v_inactive_deg_ids <- filter( untreat_v_inactive_deg, qval < 0.05 ) %>%
+  pull( gene_id )
+
+all_deg <- union( untreat_v_control_deg_ids, untreat_v_inactive_deg_ids )
+```
+
+```{r process_deg}
+untreated_v_control_lists <- direction_gene_ids_from_de( untreat_v_control_deg )
+
+inactive_v_untreated_lists <- untreat_v_inactive_deg %>%
+  mutate( FoldChange = FoldChange * ( -1.0 ) ) %>%
+  direction_gene_ids_from_de( . )
+
+# why, you might ask, are we flipping
+# the fold-change?
+# Reader, this was setup so that downstream
+# we expect one part of alluvial to be
+# case / control. And another part to be
+# timepoint 2 / timepoint 1.
+# i.e. untreated / control and
+# inactive / untreated. Problem
+# is the reviewers wanted it to be
+# untreated / control and untreated / inactive
+# so here we are. ¯\_(ツ)_/¯
+```
+
+DE Untreated v. Control: `r untreated_v_control_lists[[ 'num_de' ]]`.
+DE Down: `r untreated_v_control_lists[[ 'num_down' ]]`.
+DE Up: `r untreated_v_control_lists[[ 'num_up' ]]`.
+
+DE Inactive v. Untreated: `r inactive_v_untreated_lists[[ 'num_de' ]]`.
+DE Down: `r inactive_v_untreated_lists[[ 'num_down' ]]`.
+DE Up: `r inactive_v_untreated_lists[[ 'num_up' ]]`.
+
+```{r setup_alluvial_frame}
+for_alluvial <- setup_alluvial_table_paired_data( untreated_v_control_lists, inactive_v_untreated_lists )
+
+for_alluvial
+
+for_alluvial <- for_alluvial %>%
+  dplyr::rename( .data = ., count = n ) %>%
+  filter( .data = ., count > 0 ) %>%
+  filter( .data = ., !( Left == "Unchanged" & Right == "Unchanged" ) ) %>%
+  as.data.frame( . )
+
+left_sums <- for_alluvial %>%
+  dplyr::group_by( .data = ., Left ) %>%
+	dplyr::summarize(
+		total = sum( count )
+	) %>%
+	as.data.frame( . )
+rownames( left_sums ) = left_sums$Left
+
+right_sums <- for_alluvial %>%
+	dplyr::group_by( Right ) %>%
+	dplyr::summarise(
+		total = sum( count )
+	) %>%
+	as.data.frame( . )
+rownames( right_sums ) = right_sums$Right
+
+for_alluvial <- for_alluvial %>%
+	mutate( Left_label = paste0( Left, "\n(n=", left_sums[ as.character( Left ), "total" ], ")" ) ) %>%
+	mutate( Right_label = paste0( Right, "\n(n=", right_sums[ as.character( Right ), "total" ], ")" ) ) %>%
+  write_tsv( x = ., path = here( 'results', "alluvial_input_table_untreated.tsv" ) )
+```
+
+```{r alluvial_plot}
+ggplot( data = for_alluvial, aes( y = count, axis1 = Left_label, axis2 = Right_label ) ) +
+  	geom_alluvium( aes( fill=Left ) ) +
+  	geom_stratum( width = 1/4, fill = "black", color = "grey" ) +
+  	geom_label( stat = "stratum", label.strata = TRUE ) +
+  	theme_bw() +
+  	gg_no_x_grid +
+  	scale_x_continuous( breaks = 1:2, labels = c( 'Untreated', 'Inactive' ) ) +
+  	gg_bigger_texts +
+  	theme( legend.position = 'none' ) #+
+  	#ggtitle( "Changes in gene expression in response to treatment" ) +
+  	#gg_center_title + 
+    #guides( fill = guide_legend( title = "" ) )
+```
+
+## Adding resolution status to the DEG output for Inactive vs. Untreated
+
+```{r update_inactive_untreated_new_column}
+# this is *treatment* effect
+# fold changes are untreated vs. inactive
+# if untreated vs. control was up AND untreated vs. inactive is UP, then it improved.
+# if untreated vs. control was down AND untreated vs. inactive is DOWN, then it improved
+# opposite fold changes therefore mean worsening after treatment
+#
+# TL;DR -- this is correct still, but may seem backwards
+untreat_with_effect <- untreat_v_inactive_deg %>%
+	mutate( TreatmentEffect = case_when(
+	  qval < 0.05 & FoldChange < 0.0 & gene_id %in% untreated_v_control_lists[[ 'down_gene_ids' ]] ~ "Improved",
+	  qval < 0.05 & FoldChange > 0.0 & gene_id %in% untreated_v_control_lists[[ 'up_gene_ids' ]] ~ "Improved",
+	  qval < 0.05 & FoldChange < 0.0 & gene_id %in% untreated_v_control_lists[[ 'up_gene_ids' ]] ~ "Worsened",
+	  qval < 0.05 & FoldChange > 0.0 & gene_id %in% untreated_v_control_lists[[ 'down_gene_ids' ]] ~ "Worsened",
+	  qval < 0.05 ~ "New",
+	  qval >= 0.05 & gene_id %in% untreated_v_control_lists[[ 'deg_gid' ]] ~ "Unresolved",
+	  qval >= 0.05 ~ "Never DE",
+		TRUE ~ "Problem"
+	)) %>%
+	arrange( qval, pval, symbol ) %>%
+	write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_with_effect.tsv' ) )
+```
+
+# new lists for gprofiler depending on resolution
+```{r new_gprofiler}
+untreat_with_effect <- untreat_with_effect %>%
+	mutate( Untreated_v_Control = case_when(
+	  gene_id %in% untreated_v_control_lists[[ 'down_gene_ids' ]] ~ "Down",
+	  gene_id %in% untreated_v_control_lists[[ 'up_gene_ids' ]] ~ "Up",
+	  TRUE ~ "NotDE"
+	) )
+
+# untreat decrease - improved
+filter( untreat_with_effect, Untreated_v_Control == "Down" ) %>%
+  filter( TreatmentEffect == "Improved" ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_DownToImproved.tsv' ), col_names = FALSE )
+
+# untreat increase - improved
+filter( untreat_with_effect, Untreated_v_Control == "Up" ) %>%
+  filter( TreatmentEffect == "Improved" ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_UpToImproved.tsv' ), col_names = FALSE )
+
+# untreat decrease - same
+filter( untreat_with_effect, Untreated_v_Control == "Down" ) %>%
+  filter( TreatmentEffect == "Unresolved" ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_DownToUnresolved.tsv' ), col_names = FALSE )
+
+# untreat increase - same
+filter( untreat_with_effect, Untreated_v_Control == "Up" ) %>%
+  filter( TreatmentEffect == "Unresolved" ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_UpToUnresolved.tsv' ), col_names = FALSE )
+
+# new de - down in inactive
+filter( untreat_with_effect, TreatmentEffect == "New" & FoldChange > 0.0 ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_NotDEtoDownInInactive.tsv' ), col_names = FALSE )
+
+# new de - up in inactive
+filter( untreat_with_effect, TreatmentEffect == "New" & FoldChange < 0.0 ) %>%
+  pull( gene_id ) %>%
+  data.frame( gene_id = . ) %>%
+  write_tsv( x = ., path = here( 'results', 'DiffExp_Untreated_over_Inactive_gprofile_NotDEtoUpInInactive.tsv' ), col_names = FALSE )
+```
+
+```{r muscle_specific_genes}
+skin_deg_ids <- read_tsv( file = here( "results", "DiffExp_Skin_JDM_over_Control.tsv" ) ) %>%
+  filter( qval < 0.05 ) %>%
+  pull( gene_id )
+
+remove_id_list <- union( x = untreat_v_control_deg_ids, y = untreat_v_inactive_deg_ids ) %>%
+  union( x = ., y = skin_deg_ids )
+
+muscle_genes <- read_tsv( file = here( "results", "DiffExp_Muscle_JDM_over_Control.tsv" ) ) %>%
+  filter( qval < 0.05 )
+
+good_muscle_ids <- setdiff( x = pull( muscle_genes, gene_id ), y = remove_id_list )
+
+muscle_genes %>%
+  filter( gene_id %in% good_muscle_ids ) %>%
+  filter( FoldChange < 0.0 ) %>%
+  write_tsv( x = ., path = here( "results", "DiffExp_MuscleSpecific_DownJDM.tsv" ) ) %>%
+  select( gene_id ) %>%
+  write_tsv( x = ., path = here( "results", "DiffExp_MuscleSpecific_DownJDM_gprofile.tsv" ), col_names = FALSE )
+
+muscle_genes %>%
+  filter( gene_id %in% good_muscle_ids ) %>%
+  filter( FoldChange > 0.0 ) %>%
+  write_tsv( x = ., path = here( "results", "DiffExp_MuscleSpecific_UpJDM.tsv" ) ) %>%
+  select( gene_id ) %>%
+  write_tsv( x = ., path = here( "results", "DiffExp_MuscleSpecific_UpJDM_gprofile.tsv" ), col_names = FALSE )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

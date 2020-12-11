@@ -1,0 +1,212 @@
+---
+title: "Generate info for networks"
+author: "Elisha Roberson"
+date: "2020-11-30"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r placeholderframe}
+output <- data.frame()
+```
+
+```{r functions}
+#  yeah yeah, I know there is a shared function file
+# This is only going to be used here so I put it here
+parse_wgcna <- function( my_path ) {
+  processed_path <- str_replace( string = my_path, pattern = ".tsv", replacement = "_processed.tsv" )
+  down_ids <- str_replace( string = my_path, pattern = ".tsv", replacement = "_down_ids.tsv" )
+  up_ids <- str_replace( string = my_path, pattern = ".tsv", replacement = "_up_ids.tsv" ) 
+  
+  tmp <- read_tsv( file = my_path ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  select( gene_id:p.GS.Status ) %>%
+  mutate( direction = case_when(
+    GS.corr.Status < 0.0 ~ "Negative",
+    GS.corr.Status > 0.0 ~ "Positive",
+    TRUE ~ "Problem"
+  ) ) %>%
+    write_tsv( x = ., path = processed_path )
+  
+  tmp %>%
+    filter( GS.corr.Status < 0.0 ) %>%
+    select( gene_id ) %>%
+    write_tsv( x = ., path = down_ids, col_names = FALSE )
+  
+  tmp %>%
+    filter( GS.corr.Status > 0.0 ) %>%
+    select( gene_id ) %>%
+    write_tsv( x = ., path = up_ids, col_names = FALSE )
+  
+  return( tmp )
+}
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+# DAS-M
+```{r dasm_network_info}
+parsed <- parse_wgcna( my_path = here( "results", "wgcna", "PBMC_WGCNA_table_DASM.tsv" ) )
+
+cat( "Summary per module\n" )
+with( parsed, table( moduleColor, direction ) )
+
+cat( "Modules\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  unique( . ) %>%
+  length( . )
+
+cat( "Overall directions\n" )
+with( parsed, table( direction ) )
+
+cat( "Total enrichments\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  length( . )
+
+output <- with( parsed, table( direction ) ) %>%
+  as.data.frame( . ) %>%
+  mutate( Tissue = "PBMC" ) %>%
+  mutate( Trait = "DAS-M" ) %>%
+  rbind( output, . )
+
+rm( parsed )
+```
+
+# DAS-S
+```{r dass_network_info}
+parsed <- parse_wgcna( my_path = here( "results", "wgcna", "PBMC_WGCNA_table_DASS.tsv" ) )
+
+cat( "Summary per module\n" )
+with( parsed, table( moduleColor, direction ) )
+
+cat( "Modules\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  unique( . ) %>%
+  length( . )
+
+cat( "Overall directions\n" )
+with( parsed, table( direction ) )
+
+cat( "Total enrichments\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  length( . )
+
+output <- with( parsed, table( direction ) ) %>%
+  as.data.frame( . ) %>%
+  mutate( Tissue = "PBMC" ) %>%
+  mutate( Trait = "DAS-S" ) %>%
+  rbind( output, . )
+
+rm( parsed )
+```
+
+# DAS-T
+```{r dast_network_info}
+parsed <- parse_wgcna( my_path = here( "results", "wgcna", "PBMC_WGCNA_table_DAST.tsv" ) )
+
+cat( "Summary per module\n" )
+with( parsed, table( moduleColor, direction ) )
+
+cat( "Modules\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  unique( . ) %>%
+  length( . )
+
+cat( "Overall directions\n" )
+with( parsed, table( direction ) )
+
+cat( "Total enrichments\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  length( . )
+
+output <- with( parsed, table( direction ) ) %>%
+  as.data.frame( . ) %>%
+  mutate( Tissue = "PBMC" ) %>%
+  mutate( Trait = "DAS-T" ) %>%
+  rbind( output, . )
+
+rm( parsed )
+```
+
+# ERL
+```{r erl_network_info}
+parsed <- parse_wgcna( my_path = here( "results", "wgcna", "PBMC_WGCNA_table_ERL.tsv" ) )
+
+cat( "Summary per module\n" )
+with( parsed, table( moduleColor, direction ) )
+
+cat( "Modules\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  unique( . ) %>%
+  length( . )
+
+cat( "Overall directions\n" )
+with( parsed, table( direction ) )
+
+cat( "Total enrichments\n" )
+parsed %>%
+  pull( moduleColor ) %>%
+  length( . )
+
+output <- with( parsed, table( direction ) ) %>%
+  as.data.frame( . ) %>%
+  mutate( Tissue = "PBMC" ) %>%
+  mutate( Trait = "ERL" ) %>%
+  rbind( output, . )
+
+rm( parsed )
+```
+
+```{r write_summary}
+output %>%
+  pivot_wider( id_cols = c( "Tissue", "Trait" ), names_from = "direction", values_from = "Freq" ) %>%
+  write_tsv( x = ., path = here::here( "results", "wgcna_network_summary.tsv" ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

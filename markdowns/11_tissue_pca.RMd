@@ -1,0 +1,143 @@
+---
+title: "Tissue-specific PCA"
+author: "Elisha Roberson"
+date: "2020-10-17"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( ggrepel )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+```{r constants}
+fc_cutoff <- 2.0
+```
+
+```{r load_gene_lists}
+skin_over_pbmc_deg <- read_tsv( file = here( 'results', 'DiffExp_Skin_over_PBMC.tsv' ) ) %>%
+	filter( qval < 0.05 & abs( FoldChange ) >= fc_cutoff )
+
+muscle_over_pbmc_deg <- read_tsv( file = here( 'results', 'DiffExp_Muscle_over_PBMC.tsv' ) ) %>%
+	filter( qval < 0.05 & abs( FoldChange ) >= fc_cutoff )
+
+pbmc_skin_rank <- skin_over_pbmc_deg %>%
+  filter( FoldChange < 0 ) %>%
+  arrange( qval ) %>%
+  select( gene_id )
+pbmc_skin_rank$skin_rank = 1:nrow( pbmc_skin_rank )
+
+pbmc_muscle_rank <- muscle_over_pbmc_deg %>%
+  filter( FoldChange < 0 ) %>%
+  arrange( qval ) %>%
+  select( gene_id )
+pbmc_muscle_rank$muscle_rank = 1:nrow( pbmc_muscle_rank )
+
+merge_pbmc_rank <- merge( x = pbmc_skin_rank, y = pbmc_muscle_rank ) %>%
+  mutate( med_rank = ( skin_rank + muscle_rank ) / 2 )  %>%
+  arrange( med_rank )
+
+skin_ids <- skin_over_pbmc_deg %>%
+  filter( FoldChange > 0.0 ) %>%
+  top_n( x = ., n = -30, wt = qval ) %>%
+  pull( gene_id )
+
+muscle_ids <- muscle_over_pbmc_deg %>%
+  filter( FoldChange > 0.0 ) %>%
+  top_n( x = ., n = -30, wt = qval ) %>%
+  pull( gene_id )
+
+pbmc_ids <- merge_pbmc_rank %>%
+  top_n( x = ., n = -28, wt = med_rank ) %>%
+  pull( gene_id )
+
+pca_gene_ids <- union( x = skin_ids, muscle_ids ) %>%
+  union( x = ., y = pbmc_ids )
+
+length( pca_gene_ids )
+```
+
+```{r rgsm}
+info <- read_csv( file = here::here( "info", "JDM_RNASeq_ReadGroup_Info.csv" ) ) %>%
+  select( -RGID ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+rownames( info ) = info$RGSM
+```
+
+```{r rlog}
+rlog <- read_tsv( file = here( 'results', 'unspliced_rlog_expression.tsv.gz' ), col_names = TRUE, col_types = cols( .default = 'd', gene_id = 'c' ) ) %>%
+	as.data.frame( . ) %>%
+	column_to_rownames( "gene_id" ) %>%
+	as.matrix( . )
+
+rlog <- rlog[ pca_gene_ids, rownames( info ) ]
+```
+
+```{r tissue_pca}
+first_plot_pc <- 1
+second_plot_pc <- 2
+
+# Run PCA
+pca_out <- prcomp( x = t( rlog ), scale. = TRUE )
+percent_variance <- round( pca_out$sdev^2 / sum( pca_out$sdev^2 )* 100.0, 2 )
+
+# Add demographics
+pca_coords <- pca_out$x %>%
+	as.data.frame( . ) %>%
+	rownames_to_column( ., "RGSM" ) %>%
+	merge( info, ., by = "RGSM" )
+
+# Plot dimension names
+x_dim_name <- paste0( "PC", first_plot_pc, " (", percent_variance[first_plot_pc], "%)" )
+y_dim_name <- paste0( "PC", second_plot_pc, " (", percent_variance[second_plot_pc], "%)" )
+
+ggplot( data = pca_coords, mapping = aes( x = PC1, y = PC2, shape = Tissue, colour = Tissue ) ) +
+	theme_bw() +
+  scale_color_manual( values = c( 'black', reds3Palette[3], reds3Palette[2] ) ) +
+	geom_point( size = 3 ) +
+	gg_bigger_texts +
+	gg_center_title +
+	xlab( x_dim_name ) +
+	ylab( y_dim_name )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

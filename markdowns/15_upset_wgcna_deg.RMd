@@ -1,0 +1,119 @@
+---
+title: "WGCNA & DEG Upset Chart"
+author: "Elisha Roberson"
+date: "2020-10-18"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( UpSetR )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+```{r lists}
+untreated_deg_id <- read_tsv( file = here( 'results', 'DiffExp_PBMC_Untreated_over_Control.tsv' ) ) %>%
+  filter( qval < 0.05 ) %>%
+  pull( gene_id )
+
+dass_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DASS.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  pull( gene_id )
+
+dasm_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DASM.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  pull( gene_id )
+
+dast_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DAST.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  pull( gene_id )
+
+erl_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_ERL.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  pull( gene_id )
+```
+
+```{r df_creation}
+upset_df <- union( x = untreated_deg_id, y = dasm_id ) %>%
+  union( x = ., y = dast_id ) %>%
+  union( x = ., y = erl_id ) %>%
+  union( x = ., y = dass_id ) %>%
+  data.frame( gene_id = . ) %>%
+  mutate( DEG = case_when( 
+    gene_id %in% untreated_deg_id ~ 1,
+    TRUE ~  0 ) ) %>%
+  mutate( `DAS-M` = case_when(
+    gene_id %in% dasm_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `DAS-S` = case_when(
+    gene_id %in% dass_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `DAS-T` = case_when(
+    gene_id %in% dast_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( ERL = case_when(
+    gene_id %in% erl_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" )
+```
+
+```{r wgcna_deg_upset}
+upset( upset_df, 
+       text.scale = c( 2, 2, 1.2, 1.2, 2, 2 ), 
+       point.size = 3, 
+       nintersects = NA,
+       order.by = 'freq' )
+```
+
+```{r shared_across}
+summed_rows <- rowSums( upset_df )
+
+shared_genes <- which( summed_rows == 5 ) %>%
+  names( . )
+
+
+filter( ensembl, gene_id %in% shared_genes ) %>%
+  arrange( symbol, gene_id ) %>%
+  write_tsv( x = ., path = here( "results", "shared_deg_and_correlated.tsv" ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

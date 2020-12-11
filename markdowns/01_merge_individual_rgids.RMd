@@ -1,0 +1,118 @@
+---
+title: "Merge individual RGIDs into an RGSM"
+author: "Elisha Roberson"
+date: "2020-09-29"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( reshape2 )
+```
+
+```{r source}
+source( file = here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r sample_info}
+rgid_info <- read_csv( file = here( "info", "JDM_RNASeq_ReadGroup_Info.csv" ) )
+
+rgsm_list <- pull( rgid_info, var = RGSM ) %>%
+  sort( . ) %>%
+  unique( . )
+
+rgsm_info <- select( rgid_info, RGSM, Status, Sex, Tissue ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+```{r generate_run_from_info}
+rgid_info <- rgid_info %>%
+  mutate( Run = str_replace( string = RGID, pattern = "_([ACGT]+)$", replacement = "" ) ) %>%
+  mutate( Run = str_replace( string = Run, pattern = "_([ACGT]+)$", replacement = "" ) )
+```
+
+```{r count_info}
+rgid_count_matrix <- read_csv( file = here( "data", "rgid_unspliced_saf.csv.gz" )  ) %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" ) %>%
+  as.matrix( . )
+```
+
+```{r sum_by_rgid}
+count_sample_rgid <- rgid_count_matrix %>%
+  melt( . ) %>%
+  dplyr::group_by( Var2 ) %>%
+  dplyr::summarise(
+    Summed = sum( value )
+  ) %>%
+  dplyr::rename( RGID = Var2 ) %>%
+  merge( x = ., y = select( rgid_info, RGID, RGSM, Run ), by = "RGID" ) %>%
+  pivot_wider( id_cols = RGSM, names_from = Run, values_from = Summed, values_fill = list( "Summed" = 0 ) ) %>%
+  arrange( RGSM ) %>%
+  write_tsv( x = ., path = here::here( "results", "reads_by_rgid.tsv" ) )
+```
+
+```{r sum_by_rgsm}
+count_sample_rgsm <- rgid_count_matrix %>%
+  melt( . ) %>%
+  rename( RGID = Var2 ) %>%
+  merge( x = ., y = select( rgid_info, RGID, RGSM ), by = "RGID" ) %>%
+  dplyr::group_by( RGSM ) %>%
+  dplyr::summarise( Total = sum( value ) ) %>%
+  write_tsv( x = ., path = here::here( "results", "reads_by_rgsm.tsv" ) )
+
+mean( count_sample_rgsm$Total )
+median( count_sample_rgsm$Total )
+```
+
+```{r unified}
+unified <- merge( x = count_sample_rgsm, y = count_sample_rgid, by = "RGSM" ) %>%
+  merge( x = rgsm_info, y = ., by = "RGSM" ) %>%
+  write_tsv( x = ., path = here( "results", "reads_per_run_unified.tsv" ) )
+```
+
+```{r sum_tibble}
+rgsm_counts <- tibble( gene_id = rownames( rgid_count_matrix ) )
+
+for ( idx in 1:length( rgsm_list ) ) {
+  curr_rgsm <- rgsm_list[ idx ]
+  
+  rgid_list <- rgid_info %>%
+    filter( RGSM == curr_rgsm ) %>%
+    pull( RGID )
+  
+  rgsm_counts[ , curr_rgsm ] <- rgid_count_matrix[ , rgid_list, drop = FALSE ] %>%
+    rowSums( x = ., na.rm = TRUE )
+}
+```
+
+```{r write_merged_rgsm}
+write_tsv( x = rgsm_counts, path = here( "results", "rgsm_unspliced_featurecounts.tsv.gz" ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

@@ -1,0 +1,133 @@
+---
+title: "DEG Upset Chart"
+author: "Elisha Roberson"
+date: "2020-10-18"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( UpSetR )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r lists}
+untreated_deg <- read_tsv( file = here( 'results', 'DiffExp_PBMC_Untreated_over_Control.tsv' ) ) %>%
+  filter( qval < 0.05 )
+
+muscle_deg <- read_tsv( file = here( 'results', 'DiffExp_Muscle_JDM_over_Control.tsv' ) ) %>%
+  filter( qval < 0.05 )
+
+skin_deg <- read_tsv( file = here( 'results', 'DiffExp_Skin_JDM_over_Control.tsv' ) ) %>%
+  filter( qval < 0.05 )
+
+untreated_down_id <- untreated_deg %>%
+  filter( FoldChange < 0.0 ) %>%
+  pull( gene_id )
+
+untreated_up_id <- untreated_deg %>%
+  filter( FoldChange > 0.0 ) %>%
+  pull( gene_id )
+
+muscle_down_id <- muscle_deg %>%
+  filter( FoldChange < 0.0 ) %>%
+  pull( gene_id )
+
+muscle_up_id <- muscle_deg %>%
+  filter( FoldChange > 0.0 ) %>%
+  pull( gene_id )
+
+skin_down_id <- skin_deg %>%
+  filter( FoldChange < 0.0 ) %>%
+  pull( gene_id )
+
+skin_up_id <- skin_deg %>%
+  filter( FoldChange > 0.0 ) %>%
+  pull( gene_id )
+```
+
+```{r df_creation}
+upset_df <- union( x = untreated_down_id, y = untreated_up_id ) %>%
+  union( x = ., y = muscle_down_id ) %>%
+  union( x = ., y = muscle_up_id ) %>%
+  union( x = ., y = skin_down_id ) %>%
+  union( x = ., y = skin_up_id ) %>%
+  data.frame( gene_id = . ) %>%
+  mutate( `Untreated - Down` = case_when(
+    gene_id %in% untreated_down_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `Untreated - Up` = case_when(
+    gene_id %in% untreated_up_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `Muscle - Down` = case_when(
+    gene_id %in% muscle_down_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `Muscle - Up` = case_when(
+    gene_id %in% muscle_up_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `Skin - Down` = case_when(
+    gene_id %in% skin_down_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  mutate( `Skin - Up` = case_when(
+    gene_id %in% skin_up_id ~ 1,
+    TRUE ~ 0 ) ) %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" )
+```
+
+```{r deg_upset}
+upset( upset_df, 
+       text.scale = c( 2, 2, 1.2, 1.2, 2, 2 ), 
+       point.size = 3, 
+       nintersects = NA,
+       nsets = 6,
+       order.by = 'freq' )
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+```{r shared_up}
+intersect( x = untreated_up_id, y = skin_up_id ) %>%
+  intersect( x = ., y = muscle_up_id ) %>%
+  data.frame( gene_id = . ) %>%
+  merge( x = ensembl, y = ., by = "gene_id" ) %>%
+  arrange( symbol ) %>%
+  write_tsv( x = ., path = here( 'results', 'shared_skin_muscle_pbmc.tsv' ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

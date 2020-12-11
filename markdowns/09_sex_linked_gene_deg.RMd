@@ -1,0 +1,139 @@
+---
+title: "Sex-linked genes all tissues"
+author: "Elisha Roberson"
+date: "2020-10-17"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( DESeq2 )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+
+ensembl_gene_ids <- pull( ensembl, gene_id )
+```
+
+```{r rgsm}
+info <- read_csv( file = here::here( "info", "JDM_RNASeq_ReadGroup_Info.csv" ) ) %>%
+  select( -RGID ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+```
+
+```{r design}
+design_tbl <- info %>%
+  select( RGSM, Status, Sex ) %>%
+  as.data.frame( . )
+rownames( design_tbl ) = design_tbl$RGSM
+```
+
+```{r read_unadjusted_counts}
+gene_counts <- read_tsv( file = here::here( 'results', 'rgsm_unspliced_featurecounts.tsv.gz' ), col_types = cols( .default = col_integer(), gene_id = col_character() ) ) %>%
+  filter( gene_id %in% ensembl_gene_ids ) %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" ) %>%
+  as.matrix( . )
+
+both_ids <- intersect( rownames( design_tbl ), colnames( gene_counts ) )
+design_tbl <- design_tbl[ both_ids, ]
+gene_counts <- gene_counts[ ,both_ids ]
+```
+
+```{r do_some_prefiltering}
+detection_status <- apply( X = gene_counts, 
+                           MARGIN = 1, 
+                           FUN = detect, 
+                           cutoff = min_reads_detection_threshold )
+
+detection_idx <- which( detection_status >= min_detected_samples_for_de )
+
+gene_counts <- gene_counts[ detection_idx, ]
+```
+
+```{r load_into_deseq2_genes}
+deseqObj <- DESeqDataSetFromMatrix( countData = gene_counts, 
+                                    colData = design_tbl, 
+                                    design = ~ Status + Sex )
+
+deseqObj <- DESeq( deseqObj, 
+                   test = "Wald", 
+                   betaPrior = FALSE )
+```
+
+```{r get_deg}
+file_base_name <- paste0( "DiffExp_Sex" )
+
+de_file <- here( 'results', paste0( file_base_name, ".tsv" ) )
+
+gprof_up_file <- here( 'results', paste0( file_base_name, "_Up_GProfile.tsv" ) )
+gprof_down_file <- here( 'results', paste0( file_base_name, "_Down_GProfile.tsv" ) )
+
+symbol_up_file <- here( 'results', paste0( file_base_name, "_Up_Symbols.tsv" ) )
+symbol_down_file <- here( 'results', paste0( file_base_name, "_Down_Symbols.tsv" ) )
+
+de_results <- results( deseqObj ) %>%
+	format_deseq_results( ., ensembl ) %>%
+  write_tsv( x = ., path = de_file )
+
+de_results %>%
+  filter( qval < 0.05 & FoldChange > 1.50 ) %>%
+  select( gene_id ) %>%
+  write_tsv( x = ., path = gprof_up_file, col_names = FALSE )
+
+de_results %>%
+  filter( qval < 0.05 & FoldChange > 1.50 ) %>%
+  select( symbol ) %>%
+  write_tsv( x = ., path = symbol_up_file, col_names = FALSE )
+
+de_results %>%
+  filter( qval < 0.05 & FoldChange < (-1.50) ) %>%
+  select( gene_id ) %>%
+  write_tsv( x = ., path = gprof_down_file, col_names = FALSE )
+
+de_results %>%
+  filter( qval < 0.05 & FoldChange < (-1.50) ) %>%
+  select( symbol ) %>%
+  write_tsv( x = ., path = symbol_down_file, col_names = FALSE )
+
+print( paste( "Paired DEG - Untreated / Inactive" ) )
+print( summarize_pretty_de_results( de_results, fc_cutoff = 1.5 ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

@@ -1,0 +1,162 @@
+---
+title: "Bicor network construction"
+author: "Elisha Roberson"
+date: "2020-10-18"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( reshape2 )
+library( WGCNA )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+rownames( ensembl ) = ensembl$gene_id
+
+ensembl_ids <- pull( ensembl, gene_id )
+```
+
+```{r lists}
+dasm_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DASM.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  select( gene_id ) %>%
+  mutate( TmpTrait = "DAS-M" )
+
+dass_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DASS.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  select( gene_id ) %>%
+  mutate( TmpTrait = "DAS-S" )
+
+dast_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_DAST.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  select( gene_id ) %>%
+  mutate( TmpTrait = "DAS-T" )
+
+erl_id <- read_tsv( file = here( 'results', 'wgcna', 'PBMC_WGCNA_table_ERL.tsv' ) ) %>%
+  filter( p.GS.Status < 0.05 ) %>%
+  select( gene_id ) %>%
+  mutate( TmpTrait = "ERL" )
+
+merged_ids <- rbind( dasm_id, dast_id ) %>%
+  rbind( ., erl_id ) %>%
+  rbind( ., dass_id ) %>%
+  filter( gene_id %in% ensembl_ids ) %>%
+  dplyr::group_by( gene_id ) %>%
+  summarise( Trait = paste( sort( TmpTrait ), collapse = ";"),
+             TraitCount = length( TmpTrait )
+  )
+
+correlated_gene_ids <- pull( merged_ids, gene_id )
+```
+
+```{r info}
+info <- read_csv( file = here( "info", "JDM_RNASeq_ReadGroup_Info.csv" ) ) %>%
+  select( -RGID ) %>%
+  filter( Tissue == "PBMC" ) %>%
+  filter( Status %in% c( 'JDM_Untreated_PBMC', 'JDM_Inactive_PBMC' ) ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+rownames( info ) = info$RGSM
+
+dim( info )
+```
+
+```{r vst_load}
+temp_expression <- read_tsv(
+  file = here( 'results', 'unspliced_vst_expression.tsv.gz' ),
+  col_names = TRUE,
+  col_types = cols( .default = col_double(), gene_id = col_character() ) ) %>%
+  filter( gene_id %in% correlated_gene_ids )
+
+transposed_expression <- temp_expression[ , c( 'gene_id', rownames( info ) ) ] %>%
+  as.data.frame( . ) %>%
+  column_to_rownames( "gene_id" ) %>%
+  as.matrix( x = . ) %>%
+  t( x = . )
+
+rm( temp_expression )
+
+keep_names <- intersect( x = rownames( transposed_expression ), y = rownames( info ) )
+
+info <- info[ keep_names, ]
+transposed_expression <- transposed_expression[ keep_names, ]
+```
+
+```{r melted_bicor}
+temp <- bicor( transposed_expression, maxPOutliers = 0.05 )
+temp[ upper.tri( temp ) ] = NA
+
+melted_bicor <- temp %>%
+  melt( . ) %>%
+  filter( abs( value ) >= 0.80 ) %>%
+  filter( Var1 != Var2 ) %>%
+  dplyr::rename( Source = Var1 ) %>%
+  dplyr::rename( Target = Var2 ) %>%
+  dplyr::rename( Correlation = value ) %>%
+  mutate( CorrType = case_when(
+    Correlation > 0 ~ "Positive",
+    Correlation < 0 ~ "Negative",
+    TRUE ~ "TROUBLE"
+  )) %>%
+  select( Source, Target, Correlation, CorrType ) %>%
+  write_csv( x = ., path = here( 'results', 'bicor_network_edges_traitsonly.csv' ) )
+
+trait_only_ids <- union( x = melted_bicor$Source, y = melted_bicor$Source )
+```
+
+```{r nodes}
+# node_info <- 
+union( x = melted_bicor$Source, y = melted_bicor$Target ) %>%
+  data.frame( gene_id = . ) %>%
+  merge( x = merged_ids, y = ., by = "gene_id" ) %>%
+  mutate( Trait = case_when(
+    is.na( Trait ) ~ "None",
+    TRUE ~ Trait
+  ) ) %>%
+  mutate( TraitCount = as.integer( TraitCount) ) %>%
+  mutate( TraitCount = case_when(
+    is.na( TraitCount ) ~ as.integer( 0 ),
+    TRUE ~ TraitCount
+  )) %>%
+  merge( x = ensembl, y = ., by = "gene_id" ) %>%
+  dplyr::rename( Id = gene_id ) %>%
+  write_csv( x = ., path = here( 'results', 'bicor_network_nodes_traitsonly.csv' ) )
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```

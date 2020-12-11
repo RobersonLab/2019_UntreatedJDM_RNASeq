@@ -1,0 +1,335 @@
+---
+title: "Process gProfile R"
+author: "Elisha Roberson"
+date: "2020-10-13"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( cowplot )
+```
+
+```{r source}
+source( file = here::here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+rownames( ensembl ) = ensembl$gene_id
+
+ensembl_gene_ids <- pull( ensembl, gene_id )
+```
+
+# PBMC - Untreated
+```{r load_gprofiles_untreated}
+pbmc_down_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Control_gprofile_down.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+
+pbmc_up_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Control_gprofile_up.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r pmbc_untreated_volcano_y_gprofile}
+top_n_pbmc_up <- pbmc_up_gprofile %>%
+  top_n( x = ., n = -20, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+pbmc_up_ggplot <- ggplot( top_n_pbmc_up, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( top_n_pbmc_up ), " increased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+pbmc_untreated_merged_gprofile <- pbmc_up_ggplot
+
+
+load( file = here( 'results', 'r_objects', 'Volcano_PBMC_Untreated_over_Control.RData' ) )
+
+volcano_object <- volcano_object +
+  gg_reduce_pathway_text
+
+plot_grid( volcano_object,
+           pbmc_untreated_merged_gprofile, 
+           nrow = 1, 
+           rel_widths = c( 1, 1.5 ), 
+           labels = c( 'a', 'b' ) )
+
+rm( volcano_object )
+```
+
+# PBMC - inactive
+```{r load_gprofiles_inactive}
+pbmc_down_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_down.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+
+pbmc_up_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_up.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r pmbc_inactive_volcano_y_gprofile}
+load( file = here( 'results', 'r_objects', 'Volcano_Untreated_over_Inactive.RData' ) )
+
+top_n_pbmc_down <- pbmc_down_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+top_n_pbmc_up <- pbmc_up_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+pbmc_down_ggplot <- ggplot( top_n_pbmc_down, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( top_n_pbmc_down ), " decreased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+pbmc_up_ggplot <- ggplot( top_n_pbmc_up, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( top_n_pbmc_up ), " increased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+volcano_grid <- plot_grid( volcano_object, labels = 'a' )
+profile_grid <- plot_grid( pbmc_down_ggplot, pbmc_up_ggplot, nrow = 2, labels = c( 'b', 'c' ) )
+
+plot_grid( volcano_grid, profile_grid, nrow = 1, rel_widths = c( 1, 1.5 ) )
+
+rm( volcano_object )
+```
+
+# Muscle
+```{r load_muscle_gprofile}
+muscle_down_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'Muscle_JDM_over_Control_gprofile_down.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+
+muscle_up_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'Muscle_JDM_over_Control_gprofile_up.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r muscle_volcano_y_gprofile}
+load( file = here( 'results', 'r_objects', 'Volcano_Muscle_JDM_over_Control.RData' ) ) +
+  gg_reduce_pathway_text
+
+muscle_down_top_n <- muscle_down_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+muscle_up_top_n <- muscle_up_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+muscle_down_gprofile_ggplot <- ggplot( muscle_down_top_n, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( muscle_down_top_n ), " decreased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+  
+muscle_up_gprofile_ggplot <- ggplot( muscle_up_top_n, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( muscle_up_top_n ), " increased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+volcano_grid <- plot_grid( volcano_object, labels = 'a' )
+profile_grid <- plot_grid( muscle_down_gprofile_ggplot, muscle_up_gprofile_ggplot, nrow = 2, labels = c( 'b', 'c' ) )
+
+plot_grid( volcano_grid, profile_grid, nrow = 1, rel_widths = c( 1, 1.5 ) )
+
+rm( volcano_object )
+```
+
+# Skin
+```{r load_skin_gprofiles}
+skin_down_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'Skin_JDM_over_Control_gprofile_down.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+
+skin_up_gprofile <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'Skin_JDM_over_Control_gprofile_up.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r skin_volcano_y_gprofile}
+load( file = here( 'results', 'r_objects', 'Volcano_Skin_JDM_over_Control.RData' ) ) +
+  gg_reduce_pathway_text
+
+skin_down_top_n <- skin_down_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+skin_up_top_n <- skin_up_gprofile %>%
+  top_n( x = ., n = -10, wt = adjusted_p_value ) %>%
+  mutate( ., title = fct_inorder( title ) ) %>%
+  mutate( ., title = fct_rev( title ) )
+
+skin_down_gprofile_ggplot <- ggplot( skin_down_top_n, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( skin_down_top_n ), " decreased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+skin_up_gprofile_ggplot <- ggplot( skin_up_top_n, aes( y = -log10( adjusted_p_value ), x = title ) ) +
+      theme_classic() +
+      gg_reduce_pathway_text +
+      gg_center_title +
+      coord_flip() +
+      geom_col() +
+      geom_hline( yintercept = -log10( 0.05 ), linetype = 2, colour = "white" ) +
+      ylab( parse( text="-log[10](Adj.~P-value)" ) ) +
+      xlab( "Pathway\n" ) +
+      ggtitle( paste0( "Top ", nrow( skin_up_top_n ), " increased enrichments" ) ) +
+      theme( axis.text = element_text( size = 16 ) )
+
+volcano_grid <- plot_grid( volcano_object, labels = 'a' )
+profile_grid <- plot_grid( skin_down_gprofile_ggplot, skin_up_gprofile_ggplot, nrow = 2, labels = c( 'b', 'c' ) )
+
+plot_grid( volcano_grid, profile_grid, nrow = 1, rel_widths = c( 1, 1.5 ) )
+
+rm( volcano_object )
+```
+
+# dealing with the response to treatment
+```{r incr_in_untreated}
+increased_to_unresolved <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_UpToUnresolved.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+  
+increased_to_improved <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_UpToImproved.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r decr_in_untreated}
+decreased_to_unresolved <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_DownToUnresolved.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+```
+
+```{r not_de_to_changed_inactive}
+notde_to_up_in_inactive <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_NotDEtoUpInInactive.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" )
+  
+notde_to_down_in_inactive <- parse_raw_gprofile( gprof_file_path = here( 'results', 'gprofiler', 'PBMC_Untreated_over_Inactive_gprofile_NotDEtoDownInInactive.csv' ), symbol_df = ensembl ) %>%
+  filter( source != "TF" ) %>%
+  filter( source != "WP" ) %>%
+  filter( source != "MIRNA" ) %>%
+  filter( source != "HP" ) 
+```
+
+```{r wgcna_pathways}
+path_dir <- here( 'results', 'wgcna_gprofiler' )
+
+file_list <- dir( path = path_dir, pattern = "^WGCNA_.*.csv$" )
+
+for ( idx in 1:length( file_list ) ) {
+  curr_file <- file_list[ idx ]
+  
+  parse_raw_gprofile( gprof_file_path = file.path( path_dir, curr_file ), symbol_df = ensembl  )
+}
+```
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```
