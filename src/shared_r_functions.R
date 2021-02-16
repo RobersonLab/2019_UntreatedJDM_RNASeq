@@ -379,3 +379,21 @@ setup_alluvial_table_paired_data <- function( left_direction_list, right_directi
     rbind( ., data.frame( Left = "Unchanged", Right = "Unchanged", n = unchanged2unchanged ) ) %>%
     return( . )
 }
+
+########################
+# Dealing with uniprot #
+########################
+simplified_ensembl_list_for_uniprot_query <- function( uniprot_id_query, uniprot_ensembl_map ) {
+  filter( uniprot_ensembl_map, ID %in% uniprot_id_query ) %>%
+    pull( gene_id ) %>%
+    unique( . ) %>%
+    return( . )
+}
+
+convert_uniprot_list_2_ensembl_id <- function( input_string, uniprot_ensembl_map, string_sep = ";", out_sep=";" ) {
+  str_split( string = input_string, pattern = string_sep ) %>%
+    unlist( . ) %>%
+    simplified_ensembl_list_for_uniprot_query( uniprot_id_query = ., uniprot_ensembl_map =  uniprot_ensembl_map ) %>%
+    paste( ., collapse = out_sep ) %>%
+    return( . )
+}

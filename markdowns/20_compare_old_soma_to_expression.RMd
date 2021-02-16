@@ -1,0 +1,231 @@
+---
+title: "Compared to previously published Pachman SOMA data"
+author: "Elisha Roberson"
+date: "2021-01-22"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Project - Untreated + Skin + Muscle
+
+```{r load_libraries}
+library( here )
+library( tidyverse )
+library( openxlsx )
+```
+
+```{r source}
+source( file = here( "src", "shared_r_functions.R" ) )
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	fig.path = paste0( figure_dir, "/" ),
+	fig.keep = 'all',
+	dpi = 300,
+	fig.width = 11,
+	fig.height = 8.5
+)
+```
+
+```{r load_uniprot_ensembl_map}
+ensembl2uniprot <- read_tsv( file = here( "info", "biomart_uniprot_map.txt.gz" ), col_types = cols( .default = col_character() ) ) %>%
+  pivot_longer( cols = c( "UniProtKB Gene Name ID", "UniProtKB/Swiss-Prot ID" ) ) %>%
+  dplyr::rename( ID = value ) %>%
+  dplyr::rename( gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( ID_source = name )
+```
+
+```{r grab_files}
+# This SOMA data is from a published Pachman study
+# Serum protein biomarkers for juvenile dermatomyositis: a pilot study
+# PMID: 33015544
+# PMCID: PMC7528471
+# DOI: 10.1186/s41927-020-00150-7
+supplementary_soma_url <- "https://static-content.springer.com/esm/art%3A10.1186%2Fs41927-020-00150-7/MediaObjects/41927_2020_150_MOESM1_ESM.xlsx"
+
+soma_target <- here( "data/prev_published_soma.xlsx" )
+
+if ( !file.exists( soma_target ) ) {
+  download.file( url = supplementary_soma_url, 
+                 dest = soma_target,
+                 mode = 'wb')
+}
+
+soma <- readWorkbook( xlsxFile = soma_target, 
+                      sheet = "Biomarkers associated with JDM", 
+                      colNames = TRUE )
+```
+
+# Untreated JDM vs. Controls
+```{r untreated_vs_control_soma}
+untreated_vs_control <- select( soma, 
+                                Uniprot, 
+                                `log2.Fold.Change.HC.vs.U-JDM`, 
+                                `adj.P.Val.(HC.vs.U-JDM)` ) %>%
+  dplyr::rename( `Plasma protein - FoldChange (Untreated/Control)` = `log2.Fold.Change.HC.vs.U-JDM` ) %>%
+  mutate( `Plasma protein - FoldChange (Untreated/Control)` = 2^`Plasma protein - FoldChange (Untreated/Control)` ) %>%
+  mutate( `Plasma protein - FoldChange (Untreated/Control)` = case_when(
+    `Plasma protein - FoldChange (Untreated/Control)` < 1.0 ~ (-1) / `Plasma protein - FoldChange (Untreated/Control)`,
+    TRUE ~ `Plasma protein - FoldChange (Untreated/Control)`
+  ) ) %>%
+  dplyr::rename( `Plasma protein - qval` = `adj.P.Val.(HC.vs.U-JDM)` ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, 
+                                     pattern = ",", 
+                                     replacement = ";" ) ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, 
+                                     pattern = " ", 
+                                     replacement = ";" ) ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, 
+                                     pattern = ";+", 
+                                     replacement = ";" ) )
+
+untreated_vs_control$result_id = 1:nrow( untreated_vs_control )
+
+untreated_vs_control <- separate_rows( untreated_vs_control, 
+                                       Uniprot, 
+                                       sep = ";" ) %>%
+  mutate( gene_id = map_chr( .x = Uniprot, 
+                             .f = convert_uniprot_list_2_ensembl_id, 
+                             uniprot_ensembl_map = ensembl2uniprot ) ) %>%
+  separate_rows( gene_id, sep = ";" )
+```
+
+```{r read_merge_pbmc_untreated_v_control}
+untreat_v_control_deg <- read_tsv( file = here( 'results', 'DiffExp_PBMC_Untreated_over_Control.tsv' ) ) %>%
+  select( gene_id, symbol, gene_biotype, FoldChange, qval ) %>%
+  dplyr::rename( `PBMC RNA - FoldChange (Untreated/Control)` = FoldChange ) %>%
+  dplyr::rename( `PBMC RNA - qval` = qval )
+
+merged_untreated_v_control <- merge( x = untreat_v_control_deg, y = untreated_vs_control, by = "gene_id" ) %>%
+  arrange( result_id ) %>%
+  mutate( `Effect direction` = case_when(
+    `PBMC RNA - qval` > 0.05 ~ "Not DE in PBMCs",
+    sign( `PBMC RNA - FoldChange (Untreated/Control)` ) == sign( `Plasma protein - FoldChange (Untreated/Control)` ) ~ "Concordant",
+    TRUE ~ "Discordant"
+  ) ) %>%
+  write_tsv( x = ., file = here( "results", "soma_untreated_v_control_merged.tsv" ) )
+
+keep_ids <- filter( merged_untreated_v_control, `Effect direction` %in% c( 'Concordant', 'Discordant' ) ) %>%
+  pull( Uniprot )
+```
+
+Number of SOMA targets: `r length( unique( merged_untreated_v_control$result_id ) )`
+
+Number of Uniprot IDs: `r length( unique( merged_untreated_v_control$Uniprot ) )`
+
+Number of genes: `r length( unique( merged_untreated_v_control$gene_id ) )`
+
+## Concordance
+```{r untreat_control_concordance}
+with( merged_untreated_v_control, table( `Effect direction` ) )
+
+concordant_genes <- filter( merged_untreated_v_control, 
+                            `Effect direction` == "Concordant" ) %>% 
+  pull( symbol ) %>% 
+  unique( . ) %>%
+  sort( . )
+  
+discordant_genes <- filter( merged_untreated_v_control, 
+                            `Effect direction` == "Discordant" ) %>% 
+  pull( symbol ) %>% 
+  unique( . ) %>%
+  sort( . )
+```
+
+Concordant: `r concordant_genes`
+
+Discordant: `r discordant_genes`
+
+# Treated JDM versus Untreated
+```{r untreated_v_treated}
+# VERY IMPORTANT NOTE: The published table listed fold-change as Treated / Untreated.
+# Reviews asked for transcriptome data to be Untreated / Treated. We flipped the
+# directionality of the fold-change in the SOMA data to match this outcome.
+untreated_vs_treated <- select( soma, Uniprot, 
+                                `Log2.Fold.Change.U-JDM.vs.T-JDM`, 
+                                `adj.P.Val.(U-JDM.vs.T-JDM)`, 
+                                `Note:.Response.to.Treatment` ) %>%
+  dplyr::rename( `Plasma protein - FoldChange (Untreated/Treated)` = `Log2.Fold.Change.U-JDM.vs.T-JDM` ) %>%
+  mutate( `Plasma protein - FoldChange (Untreated/Treated)` = 2^`Plasma protein - FoldChange (Untreated/Treated)` ) %>%
+  mutate( `Plasma protein - FoldChange (Untreated/Treated)` = case_when(
+    `Plasma protein - FoldChange (Untreated/Treated)` < 1.0 ~ (-1) / `Plasma protein - FoldChange (Untreated/Treated)`,
+    TRUE ~ `Plasma protein - FoldChange (Untreated/Treated)`
+  ) ) %>%
+  mutate( `Plasma protein - FoldChange (Untreated/Treated)` = (-1) * `Plasma protein - FoldChange (Untreated/Treated)` ) %>%
+  dplyr::rename( `Plasma protein - qval` = `adj.P.Val.(U-JDM.vs.T-JDM)` ) %>%
+  dplyr::rename( Response = `Note:.Response.to.Treatment` ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, pattern = ",", replacement = ";" ) ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, pattern = " ", replacement = ";" ) ) %>%
+  mutate( Uniprot = str_replace_all( string = Uniprot, pattern = ";+", replacement = ";" ) ) %>%
+  mutate( Response = str_to_lower( string = Response ) ) %>%
+  mutate( Response = case_when(
+    Response == 'normalize' ~ "Improved",
+    Response == 'opposite direction from healthy controls' ~ "Worsened",
+    Response == 'did not significantly respond to treatment' ~ "Unresolved",
+    TRUE ~ "PROBLEM!"
+  ) ) %>%
+  dplyr::rename( `Plasma protein - Treatment Response` = Response )
+
+untreated_vs_treated <- separate_rows( untreated_vs_treated, 
+                                       Uniprot, 
+                                       sep = ";" ) %>%
+  filter( Uniprot %in% keep_ids ) %>%
+  mutate( gene_id = map_chr( .x = Uniprot, 
+                             .f = convert_uniprot_list_2_ensembl_id, 
+                             uniprot_ensembl_map = ensembl2uniprot ) ) %>%
+  separate_rows( gene_id, sep = ";" )
+```
+
+```{r read_merge_pbmc_untreated_v_treated}
+untreat_v_inactive_deg <- read_tsv( file = here( 'results', 'DiffExp_Untreated_over_Inactive_with_effect.tsv' ) ) %>%
+  select( gene_id, symbol, gene_biotype, FoldChange, qval, TreatmentEffect ) %>%
+  dplyr::rename( `PBMC RNA - FoldChange (Untreated/Inactive)` = FoldChange ) %>%
+  dplyr::rename( `PBMC RNA - qval` = qval ) %>%
+  dplyr::rename( `PBMC RNA - Treatment Response` = TreatmentEffect )
+
+merged_untreated_v_inactive <- merge( x = untreat_v_inactive_deg, y = untreated_vs_treated, by = "gene_id" ) %>%
+  mutate( `Response concordance` = case_when(
+    `Plasma protein - Treatment Response` == `PBMC RNA - Treatment Response` ~ paste0( "Agreement - ", `Plasma protein - Treatment Response` ),
+    TRUE ~ "Disagreement"
+  ) ) %>%
+  write_tsv( x = ., file = here( "results", "soma_untreated_v_inactive_merged.tsv" ) )
+
+agree_improved <- filter( merged_untreated_v_inactive, 
+                          `Response concordance` == "Agreement - Improved" ) %>% 
+  pull( symbol ) %>% 
+  unique( . ) %>%
+  sort( . )
+  
+agree_unresolved <- filter( merged_untreated_v_inactive,
+                            `Response concordance` == "Agreement - Unresolved" ) %>% 
+  pull( symbol ) %>% 
+  unique( . ) %>%
+  sort( . )
+  
+disagree <- filter( merged_untreated_v_inactive,
+                            `Response concordance` == "Disagreement" ) %>% 
+  pull( symbol ) %>% 
+  unique( . ) %>%
+  sort( . )
+```
+
+Response to treatment
+
+Agree improved: `r agree_improved`
+
+Agree unresolved: `r agree_unresolved`
+
+Disagree: `r disagree`
+
+# Session info
+```{r session_information}
+Sys.time()
+
+getwd()
+  
+sessionInfo()
+```
