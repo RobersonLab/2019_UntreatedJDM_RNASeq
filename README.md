@@ -1,6 +1,6 @@
-# 2019 Untreated JDM / secondary autoimmune disease RNA-Seq
+# 2021 Untreated JDM PBMCs, skin, and muscle
 
-This project used PBMCs from controls, individuals with Juvenile Dermatomyositis (JDM), and some of the same patients when they were clinically inactive. A second involved cohort involved individuals with treatment-responsive JDM and later when they developed psoriasis. We used ribosomal depletion RNA-Seq to analyze the difference amongst groups. This repository contains the code to download the associated on FigShare and run the analysis in R Studio using Knitr.
+This project used PBMCs from controls, individuals with Juvenile Dermatomyositis (JDM), and some of the same patients when they were clinically inactive. A second cohort involved skin and muscle samples from children with JDM and controls without autoimmune disease. This repository contains the code to download the associated data on FigShare (including individual gene count data) and run the analysis in R Studio.
 
 ## Data
 
@@ -9,16 +9,11 @@ This project used PBMCs from controls, individuals with Juvenile Dermatomyositis
 ## Requirements - R libraries
 * cowplot
 * DESeq2
-* dplyr
-* dynamicTreeCut
 * ggalluvial
 * ggbeeswarm
-* ggplot2
 * ggrepel
 * here
-* knitr
-* plyr
-* purrr
+* openxlsx
 * reshape2
 * tidyverse
 * UpSetR
