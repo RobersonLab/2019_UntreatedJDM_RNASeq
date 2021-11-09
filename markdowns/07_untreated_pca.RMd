@@ -11,6 +11,7 @@ editor_options:
 
 ```{r load_libraries}
 library( here )
+library( cowplot )
 library( tidyverse )
 library( ggrepel )
 ```
@@ -31,18 +32,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r gene_annotation}
-ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
-  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
-  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
-  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
-  select( .data = ., gene_id, symbol, gene_biotype ) %>%
-  as.data.frame( . ) %>%
-  unique( . )
-
-ensembl_gene_ids <- pull( ensembl, gene_id )
-```
-
 ```{r constants}
 fc_cutoff <- 2.0
 ```
@@ -53,6 +42,20 @@ untreated_v_control <- read_tsv( file = here( 'results', 'DiffExp_PBMC_Untreated
 	pull( gene_id )
 
 status_de_gene_ids <- untreated_v_control
+```
+
+```{r gene_annotation}
+ensembl <- read_tsv( file = here::here( 'info', 'biomart_gene_transcript_map.txt.gz' ), col_names = TRUE ) %>%
+  dplyr::rename( .data = ., gene_id = `Gene stable ID` ) %>%
+  dplyr::rename( .data = ., symbol = `Gene name` ) %>%
+  dplyr::rename( .data = ., gene_biotype = `Gene type` ) %>%
+  select( .data = ., gene_id, symbol, gene_biotype ) %>%
+  as.data.frame( . ) %>%
+  unique( . )
+
+rownames( ensembl ) = pull( ensembl, gene_id )
+
+ensembl_gene_ids <- pull( ensembl, gene_id )
 ```
 
 ```{r rgsm}
@@ -79,6 +82,7 @@ rlog <- read_tsv( file = here( 'results', 'unspliced_rlog_expression.tsv.gz' ), 
 	as.matrix( . )
 
 rlog <- rlog[ status_de_gene_ids, rownames( info ) ]
+rownames( rlog ) = ensembl[ rownames( rlog ), "symbol" ]
 ```
 
 ```{r disease_status_pca_both_gene_sets}
@@ -99,7 +103,7 @@ pca_coords <- pca_out$x %>%
 x_dim_name <- paste0( "PC", first_plot_pc, " (", percent_variance[first_plot_pc], "%)" )
 y_dim_name <- paste0( "PC", second_plot_pc, " (", percent_variance[second_plot_pc], "%)" )
 
-ggplot( data = pca_coords, mapping = aes( x=PC1, y=PC2, shape=Status, colour=Status ) ) +
+pca_ggplot <- ggplot( data = pca_coords, mapping = aes( x=PC1, y=PC2, shape=Status, colour=Status ) ) +
 	theme_bw() +
   scale_color_manual( values = c( 'black', reds3Palette[3], reds3Palette[2] ) ) +
 	geom_point( size=5 ) +
@@ -108,6 +112,75 @@ ggplot( data = pca_coords, mapping = aes( x=PC1, y=PC2, shape=Status, colour=Sta
 	xlab( x_dim_name ) +
 	ylab( y_dim_name ) #+
 	#ggtitle( "Disease status classification by PCA" )
+
+pca_ggplot
+```
+
+```{r loadings}
+loadings_pc1 <- pca_out$rotation[,1]
+
+load_df1 <- data.frame( gene_id = names( loadings_pc1 ), loading = unname( loadings_pc1 ) ) %>%
+  dplyr::rename( symbol = gene_id ) %>%
+  mutate( abs_loading = abs( loading ) ) %>%
+  mutate( direction = case_when(
+    loading < 0 ~ "Down",
+    loading > 0 ~ "Up",
+    TRUE ~ "Problem"
+  )) %>%
+  arrange( desc( abs_loading ) ) %>%
+  .[ 1:20, ] %>%
+  arrange( abs_loading ) %>%
+  mutate( symbol = fct_inorder( symbol ) )
+
+loadings1_plot <- ggplot( data = load_df1, mapping = aes( x = symbol, y = loading ) ) +
+  geom_bar( stat = 'identity' ) +
+  theme_bw() +
+  xlab( "" ) + 
+  ylab( "Loading" ) +
+  ggtitle( "PC1 Loadings" ) +
+  gg_center_title +
+  coord_flip() +
+  theme( axis.text.y = element_text( size = 10 ),
+         axis.title = element_text( size = 10 ) )
+
+############
+
+loadings_pc2 <- pca_out$rotation[,2]
+
+load_df2 <- data.frame( gene_id = names( loadings_pc2 ), loading = unname( loadings_pc2 ) ) %>%
+  dplyr::rename( symbol = gene_id ) %>%
+  mutate( abs_loading = abs( loading ) ) %>%
+  mutate( direction = case_when(
+    loading < 0 ~ "Down",
+    loading > 0 ~ "Up",
+    TRUE ~ "Problem"
+  )) %>%
+  arrange( desc( abs_loading ) ) %>%
+  .[ 1:20, ] %>%
+  arrange( abs_loading ) %>%
+  mutate( symbol = fct_inorder( symbol ) )
+
+loadings2_plot <- ggplot( data = load_df2, mapping = aes( x = symbol, y = loading ) ) +
+  geom_bar( stat = 'identity' ) +
+  theme_bw() +
+  xlab( "" ) + 
+  ylab( "Loading" ) +
+  ggtitle( "PC2 Loadings" ) +
+  gg_center_title +
+  coord_flip() +
+  theme( axis.text.y = element_text( size = 10 ),
+         axis.title = element_text( size = 10 ) )
+```
+
+```{r pca_with_loadings}
+left_panel <- plot_grid( pca_ggplot + theme( legend.position = 'top' ), labels = 'a' )
+left_panel
+
+right_panel <- plot_grid( loadings1_plot, loadings2_plot, labels = c( 'b', 'c' ), nrow = 2 )
+right_panel
+
+combined <- plot_grid( left_panel, right_panel, rel_widths = c( 1.0, 0.6 ) )
+combined
 ```
 
 # Session info
