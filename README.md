@@ -2,6 +2,8 @@
 
 This project used PBMCs from controls, individuals with Juvenile Dermatomyositis (JDM), and some of the same patients when they were clinically inactive. A second cohort involved skin and muscle samples from children with JDM and controls without autoimmune disease. This repository contains the code to download the associated data on FigShare (including individual gene count data) and run the analysis in R Studio.
 
+[Preprint](https://www.biorxiv.org/content/10.1101/2021.05.07.443007v2)
+
 ## Data
 
 [FigShare project](https://figshare.com/projects/2019_Untreated_juvenile_dermatomyositis_JDM_RNA-Seq/63539)
