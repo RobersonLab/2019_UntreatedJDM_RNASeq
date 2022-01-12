@@ -4,6 +4,8 @@ This project used PBMCs from controls, individuals with Juvenile Dermatomyositis
 
 [Preprint](https://www.biorxiv.org/content/10.1101/2021.05.07.443007v2)
 
+Paper: Roberson EDO, Mesa RA, Morgan GA, Cao L, Marin W, Pachman LM. Transcriptomes of peripheral blood mononuclear cells from juvenile dermatomyositis patients show elevated inflammation even when clinically inactive. Scientific Reports 2022, 12: 275. [Article](https://www.nature.com/articles/s41598-021-04302-8) [PubMedCentral](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8741808/)
+
 ## Data
 
 [FigShare project](https://figshare.com/projects/2019_Untreated_juvenile_dermatomyositis_JDM_RNA-Seq/63539)
